@@ -1,3 +1,7 @@
+# Dataset availability
+
+Large data files associated with this repository are available at zenodo.org/records/12571080. These data files can be used to reproduce all analyses and figures from "miRglmm: a generalized linear mixed model of isomiR-level counts improves estimation of miRNA-level differential expression and uncovers variable differential expression between isomiRs".
+
 # Reproductibility codes for miRglmm paper
 
 The codes in this repository, coupled with data located at XXXX, can be used to reproduce analyses and figures presented in (insert reference here).
