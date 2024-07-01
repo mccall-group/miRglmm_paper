@@ -56,3 +56,8 @@ prog_run_filteragg.R and prog_process_filteragg.R will run the analysis that fil
 
 prog_MSE.R will produce MSEs and coverage probabilities in a table. 
 
+# ERCC files directory
+
+Pre-processing of the ERCC data is described in "ERCC preprocess.txt". Python scripts used to process the ERCC data are included, along with the reference sequence database used ("sequence.fasta"). 
+
+

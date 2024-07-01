@@ -1,0 +1,30 @@
+# The ERCC data (n=104 runs) with UMI/4N method were processed as described in the code below, briefly, cutadapt was used to trim adapter sequence followed by bowtie alignment with strict parameters (n=0, no mismatches; -5 and -3 to trim 4 nucleotides on both ends of the read). The resulting alignment in SAM format were processed using python scripts to fetch read counts for each mapping miRNA and UMI/4N counts to account for PCR duplicates. 
+``` 
+adapter = "TGGAATTCTCGGGTGCCAAGGA"
+
+cutadapt -j 30 -m 16 -a {adapter} -o {i}_trimmed.fastq {i}.fastq
+~/.conda/envs/mirge38/bin/bowtie /scratch/public/apatil8/custom_data_cp/index/sequence -n 0 -5 4 -3 4 --norc -S --threads 30 {i}_trimmed.fastq {i}_umiHead.sam
+samtools view {i}_umiHead.sam > {i}_reads_template.txt ## remove header information from SAM file
+python add_umiRead_andCount.py {i}_trimmed.fastq {i}_reads_template.txt
+python prepare_Matt_panels.py {i}_trimmed_umi_bwtMapCounts.csv
+```
+Output:
+```
+## The output results in two files one panel A and B. 
+ panel A: results in miRNA sequence as 'Template', the 4N on both ends of Template as 'UMI1' and 'UMI2', mapped miRNA name as 'miRNA' and count of each occurance of the combination of Template and UMI as 'Count'
+
+Template        UMI1    UMI2    miRNA   Count
+TGAGGTAGTAGTTTGTACAGTT  AAAA    AATA    hsa-let-7g-5p   1
+TGAGGTAGTAGTTTGTACAGTT  AAAA    AATC    hsa-let-7g-5p   1
+TGAGGTAGTAGTTTGTACAGTT  AAAA    AATG    hsa-let-7g-5p   1
+TGAGGTAGTAGTTTGTACAG    AAAA    TTAC    hsa-let-7g-5p   1
+TGAGGTAGTAGTTTGTACAGTT  AAAA    ACAA    hsa-let-7g-5p   10
+TGAGGTAGTAGTTTGTACAGTT  AAAA    ACAC    hsa-let-7g-5p   2
+...
+...
+
+panel B: Similar to Panel A, where TotalCounts corresponds to Sum of the occurance of Template sequence for a given miRNA (eg. hsa-let-7g-5p) and UMI_counts is the unique occurance of each UMI pair (UMI1 and UMI2). 
+Template        miRNA   TotalCount      UMI_counts
+TGAGGTAGTAGTTTGTACAGTT  hsa-let-7g-5p   46547   9779
+
+```
