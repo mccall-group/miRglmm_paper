@@ -78,7 +78,7 @@ data_long = melt(out_all,
 data_long$`True LogFC`=as.factor(round(exp(as.numeric(as.character(data_long$truth))), digits=3))
 data_long$method=factor(data_long$method, levels=c("miRglmm", "empty", "NB GLM", "DESeq2", "edgeR", "limma-voom"))
 p2=ggplot(data_long, aes(x=`True LogFC`, y=`coverage probability`, fill=method))+geom_boxplot()+
-  ylab('coverage probability')+xlab('True Fold Change')+
+  ylab('coverage proportion')+xlab('True Fold Change')+
   scale_fill_discrete(drop=FALSE, labels=c("miRglmm", "NB GLM", "DESeq2", "limma-voom"), 
                       breaks=c("miRglmm", "NB GLM", "DESeq2", "limma-voom"))+
   theme(axis.title=element_text(size=15), axis.text=element_text(size=15),
