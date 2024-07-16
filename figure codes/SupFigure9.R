@@ -3,7 +3,7 @@ library(vcd)
 library(ggplot2)
 
 load(file='study 89/results/filter_neg1_processed_results.rda')
-contrast_in="Monocyte vs B lymphocyte"
+contrast_in="CD8 T lymphocyte vs B lymphocyte"
 
 beta_df=data.frame(results[["beta_hat"]])
 beta_df=beta_df[which(beta_df$contrast==contrast_in),]
@@ -78,13 +78,6 @@ p4=ggplot(comb_df, aes(x=limmavoom.x, y=miRglmm, color=limmavoom.y))+geom_point(
         axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
 #annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
   
-p4_legend=ggplot(comb_df, aes(x=limmavoom.x, y=miRglmm, color=limmavoom.y))+geom_point(size=3)+geom_abline()+xlab('limma-voom logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$limmavoom.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$limmavoom,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
-
-  ggsave("figures/supfigure9_legend.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
 
 ###########panel B upset plot
 library(UpSetR)

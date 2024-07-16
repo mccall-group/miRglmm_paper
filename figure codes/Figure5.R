@@ -1,113 +1,299 @@
-library(irr)
-library(vcd)
 library(ggplot2)
-
-load(file='bladder_testes_results/filter_neg1_processed_results.rda')
-
-beta_df=data.frame(results[["beta_hat"]])
-p_df=data.frame(results[["pvals"]])
-padj_df=matrix(, nrow=dim(p_df)[1], ncol=dim(p_df)[2])
-for (ind in seq(1,dim(p_df)[2])){
-  padj_df[,ind]=p.adjust(p_df[,ind], method="BH")
-}
-sig_df=data.frame(padj_df<0.05)
-colnames(sig_df)=colnames(data.frame(results[["pvals"]]))
-rownames(sig_df)=rownames(data.frame(results[["pvals"]]))
+library(lme4)
 
 
-#create interaction significant groups of all aggregated methods vs miRglmm
-sig_groups_v_miRglmm=data.frame("miRglmnb"=as.character(interaction(sig_df$miRglmm, sig_df$miRglmnb)), "DESeq2"=as.character(interaction(sig_df$miRglmm, sig_df$DESeq2)),
-                      "edgeR"=as.character(interaction(sig_df$miRglmm, sig_df$edgeR)), "limmavoom"=as.character(interaction(sig_df$miRglmm, sig_df$limmavoom)))
-rownames(sig_groups_v_miRglmm)=rownames(sig_df)
+## read in results
+load(file='bladder_testes_results/filter_neg1_results.rda')
 
-sig_groups_v_miRglmm[sig_groups_v_miRglmm=="TRUE.TRUE"]="significant for both"
-sig_groups_v_miRglmm[sig_groups_v_miRglmm=="TRUE.FALSE"]="significant for miRglmm only"
-sig_groups_v_miRglmm[sig_groups_v_miRglmm=="FALSE.TRUE"]="significant for aggregation method only"
-sig_groups_v_miRglmm[sig_groups_v_miRglmm=="FALSE.FALSE"]="significant for neither"
+############################# significant for miRglmm only
+miRNA_plot="hsa-miR-100-5p"
 
-#combine with the betas to make sure miRNAs align with correct beta
-comb_df=transform(merge(beta_df, sig_groups_v_miRglmm, by='row.names'), row.names=Row.names, Row.names=NULL)
+f1=fits[["miRglmm"]][[miRNA_plot]]
 
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`-fixef(f1)[1]
+groupB=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`+ranef(f1)$sequence$col_grouptestes+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA, "sequence"=rownames(ranef(f1)$sequence))
+groupB=data.frame("estimate"=groupB, "sequence"=rownames(ranef(f1)$sequence))
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df=rbind(groupA, groupB)
 
-#calculate ICC and Kappa to include in plotting
+#pull out fixed effect estimates
+groupA=fixef(f1)[1]-fixef(f1)[1]
+groupB=fixef(f1)[1]+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_overall=rbind(groupA, groupB)
 
-icc_out=data.frame(icc=t(sapply(seq(2,5), function(x) icc(comb_df[, c(1,x)], model="oneway", type="agreement", unit="single")$value)))
-colnames(icc_out)=colnames(comb_df)[2:5]
-kappa_out=data.frame(kappa=t(sapply(seq(2,5), function(x) Kappa(table(sig_df[,1], sig_df[,x]))[["Unweighted"]][["value"]])))
-colnames(kappa_out)=colnames(sig_df)[2:5]
-#idx=which(rownames(comb_df)=="hsa-miR-27a-3p")
-#scatter plots
-p1=ggplot(comb_df, aes(x=miRglmnb.x, y=miRglmm, color=miRglmnb.y))+geom_point()+geom_abline()+xlab('NB GLM logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$miRglmnb.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$miRglmnb,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
-  #annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
+miRNA_sub=fits[["miRglmnb"]][[miRNA_plot]]
+groupA=coef(miRNA_sub)[1]-coef(miRNA_sub)[1]
+groupB=coef(miRNA_sub)[1]+coef(miRNA_sub)[2]-coef(miRNA_sub)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_miRNA=rbind(groupA, groupB)
+ggplot(comb_df, aes(x=Pool, y=estimate, group=sequence, color="miRglmm isomiR estimates (random effects)"))+geom_line(alpha=0.5)+geom_point(alpha=0.5)+
+  geom_line(data=comb_df_overall, aes(x=Pool, y=estimate, group=1, color="miRglmm estimates (fixed effects)"), size=2)+
+  geom_line(data=comb_df_miRNA, aes(x=Pool, y=estimate, group=1, color="NB GLM estimates"), size=2)+xlab("tissue")+
+  scale_y_continuous(breaks=c(-4, -2, 0, 2), labels=round(exp(c(-4,-2,0,2)),3))+
+  ylab(paste('Expression relative to', '\n', 'average bladder expression'))+scale_x_discrete(expand=c(0.05,0))+xlab('')+
+  scale_color_manual(name="", values=c("miRglmm estimates (fixed effects)"="red", "miRglmm isomiR estimates (random effects)"="black", "NB GLM estimates"="blue"))+
+  theme(legend.position="bottom", legend.direction="horizontal", 
+        plot.title=element_text(size=20, hjust=0.5), axis.title=element_text(size=20), axis.text=element_text(size=15), legend.text=element_text(size=15))
 
-
-#ggsave("figures/figure4A_legend.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
-
-p2=ggplot(comb_df, aes(x=DESeq2.x, y=miRglmm, color=DESeq2.y))+geom_point()+geom_abline()+xlab('DESeq2 logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$DESeq2.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$DESeq2,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-      axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
-
-
-#ggsave("figures/figure4A_2.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
-
-p3=ggplot(comb_df, aes(x=edgeR.x, y=miRglmm, color=edgeR.y))+geom_point()+geom_abline()+xlab('edgeR logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$edgeR.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$edgeR,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
+#ggsave(paste0("figures/visabstract_Fig2_legend.tif"), plot=last_plot(), device="tiff", scale=2.5, width=83, height=50, units="mm", dpi=320, bg="white")
+#ggsave(paste0("figures/visabstract_Fig2.tif"), plot=last_plot(), device="tiff", scale=3, width=62, height=50, units="mm", dpi=320, bg="white")
+ggsave("figures/figure5_legend.tif", plot=last_plot(), device="tiff", width=12.8, height=4.3, units="in", dpi=320, bg="white")
   
-  #ggsave("figures/figure4A_3.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
 
-p4=ggplot(comb_df, aes(x=limmavoom.x, y=miRglmm, color=limmavoom.y))+geom_point()+geom_abline()+xlab('limma-voom logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$limmavoom.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$limmavoom,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
-  
-p4_legend=ggplot(comb_df, aes(x=limmavoom.x, y=miRglmm, color=limmavoom.y))+geom_point()+geom_abline()+xlab('limma-voom logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$limmavoom.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$limmavoom,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
+p1=ggplot(comb_df, aes(x=Pool, y=estimate, group=sequence, color="miRglmm isomiR estimates (random effects)"))+geom_line(alpha=0.5)+geom_point(alpha=0.5)+
+  geom_line(data=comb_df_overall, aes(x=Pool, y=estimate, group=1, color="miRglmm estimates (fixed effects)"), size=2)+
+  geom_line(data=comb_df_miRNA, aes(x=Pool, y=estimate, group=1, color="aggregated method estimates"), size=2)+xlab("tissue")+
+  scale_y_continuous(breaks=log(c(10,1,0.1, 0.01)), labels=c(10,1,0.1, 0.01))+
+  ylab(paste('Expression relative to', '\n', 'average bladder expression'))+scale_x_discrete(expand=c(0.1,0))+xlab('x')+
+  scale_color_manual(name="", values=c("miRglmm estimates (fixed effects)"="red", "miRglmm isomiR estimates (random effects)"="black", "aggregated method estimates"="blue"))+
+  ggtitle("hsa-miR-100-5p")+
+  theme(legend.position="none",
+        plot.title=element_text(size=20, hjust=0.5), 
+        axis.title.x=element_blank(), axis.title=element_text(size=20), axis.text=element_text(size=20))
 
-  ggsave("figures/figure5_legend.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
+#ggsave("figures/figure5_A.tif", plot=last_plot(), device="tiff", width=6.98, height=4.84, units="in", dpi=320, bg="white")
 
-###########panel B upset plot
-library(UpSetR)
+############################# significant for miRglmm only
+miRNA_plot="hsa-miR-143-5p"#"hsa-miR-100-5p"#
 
-list_Input=list(miRglmm=rownames(sig_df)[sig_df$miRglmm==TRUE], DESeq2=rownames(sig_df)[sig_df$DESeq2==TRUE],`NB GLM`=rownames(sig_df)[sig_df$miRglmnb==TRUE], 
-                edgeR=rownames(sig_df)[sig_df$edgeR==TRUE], `limma-voom`=rownames(sig_df)[sig_df$limmavoom==TRUE])
-myplot=upset(fromList(list_Input), order.by="freq", mainbar.y.label="Number of common significant miRNA",
-             sets.x.label="Significant miRNA", text.scale=c(2, 2, 2,2,2,2))
+f1=fits[["miRglmm"]][[miRNA_plot]]
 
-tiff(file="figures/figure5B.tif", height=6.74, width=8.9, units="in", res=320)
-print(myplot)
-dev.off()
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`-fixef(f1)[1]
+groupB=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`+ranef(f1)$sequence$col_grouptestes+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA, "sequence"=rownames(ranef(f1)$sequence))
+groupB=data.frame("estimate"=groupB, "sequence"=rownames(ranef(f1)$sequence))
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df=rbind(groupA, groupB)
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]-fixef(f1)[1]
+groupB=fixef(f1)[1]+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_overall=rbind(groupA, groupB)
+
+miRNA_sub=fits[["miRglmnb"]][[miRNA_plot]]
+groupA=coef(miRNA_sub)[1]-coef(miRNA_sub)[1]
+groupB=coef(miRNA_sub)[1]+coef(miRNA_sub)[2]-coef(miRNA_sub)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_miRNA=rbind(groupA, groupB)
+
+p2=ggplot(comb_df, aes(x=Pool, y=estimate, group=sequence, color="miRglmm isomiR estimates (random effects)"))+geom_line(alpha=0.5)+geom_point(alpha=0.5)+
+  geom_line(data=comb_df_overall, aes(x=Pool, y=estimate, group=1, color="miRglmm estimates (fixed effects)"), size=2)+
+  geom_line(data=comb_df_miRNA, aes(x=Pool, y=estimate, group=1, color="aggregated method estimates"), size=2)+xlab("tissue")+
+  scale_y_continuous(breaks=log(c(2,1,0.5)), labels=c(2,1,0.5))+
+  ylab(paste('Expression relative to', '\n', 'average bladder expression'))+scale_x_discrete(expand=c(0.1,0))+xlab('x')+
+  scale_color_manual(name="", values=c("miRglmm estimates (fixed effects)"="red", "miRglmm isomiR estimates (random effects)"="black", "aggregated method estimates"="blue"))+
+  ggtitle("hsa-miR-143-5p")+
+  theme(legend.position="none",
+        plot.title=element_text(size=20, hjust=0.5), 
+        axis.title.x=element_blank(), axis.title=element_text(size=20), axis.text=element_text(size=20))
+
+#ggsave("figures/figure5_B.tif", plot=last_plot(), device="tiff", width=6.98, height=4.84, units="in", dpi=320, bg="white")
+
+############################# significant for miRglmm only
+miRNA_plot="hsa-miR-222-3p"#"hsa-miR-100-5p"#
+
+f1=fits[["miRglmm"]][[miRNA_plot]]
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`-fixef(f1)[1]
+groupB=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`+ranef(f1)$sequence$col_grouptestes+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA, "sequence"=rownames(ranef(f1)$sequence))
+groupB=data.frame("estimate"=groupB, "sequence"=rownames(ranef(f1)$sequence))
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df=rbind(groupA, groupB)
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]-fixef(f1)[1]
+groupB=fixef(f1)[1]+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_overall=rbind(groupA, groupB)
+
+miRNA_sub=fits[["miRglmnb"]][[miRNA_plot]]
+groupA=coef(miRNA_sub)[1]-coef(miRNA_sub)[1]
+groupB=coef(miRNA_sub)[1]+coef(miRNA_sub)[2]-coef(miRNA_sub)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_miRNA=rbind(groupA, groupB)
+
+p3=ggplot(comb_df, aes(x=Pool, y=estimate, group=sequence, color="miRglmm isomiR estimates (random effects)"))+geom_line(alpha=0.5)+geom_point(alpha=0.5)+
+  geom_line(data=comb_df_overall, aes(x=Pool, y=estimate, group=1, color="miRglmm estimates (fixed effects)"), size=2)+
+  geom_line(data=comb_df_miRNA, aes(x=Pool, y=estimate, group=1, color="aggregated method estimates"), size=2)+xlab("tissue")+
+  scale_y_continuous(breaks=log(c(1000, 100,10,1,0.1, 0.01)), labels=c(expression(paste("10"^"3")),expression(paste("10"^"2")), 10,1,0.1, 0.01))+
+  ylab(paste('Expression relative to', '\n', 'average bladder expression'))+scale_x_discrete(expand=c(0.1,0))+xlab('x')+
+  scale_color_manual(name="", values=c("miRglmm estimates (fixed effects)"="red", "miRglmm isomiR estimates (random effects)"="black", "aggregated method estimates"="blue"))+
+  ggtitle("hsa-miR-222-3p")+
+  theme(legend.position="none",
+        plot.title=element_text(size=20, hjust=0.5), 
+        axis.title.x=element_blank(), axis.title=element_text(size=20), axis.text=element_text(size=20))
+
+#ggsave("figures/figure5_C.tif", plot=last_plot(), device="tiff", width=6.98, height=4.84, units="in", dpi=320, bg="white")
 
 
-upset_ind=myplot[["New_data"]]
-x1=unlist(list_Input, use.names=TRUE)
-x1=x1[!duplicated(x1)]
-idx=which(upset_ind$miRglmm==1 & upset_ind$DESeq2==0 & upset_ind$edgeR==0 & upset_ind$`limma-voom`==0 & upset_ind$`NB GLM`==0)
-x1[idx]
-idx=which(upset_ind$miRglmm==0 & upset_ind$DESeq2==1 & upset_ind$edgeR==1 & upset_ind$`limma-voom`==1 & upset_ind$`NB GLM`==1)
-x1[idx]
+############################# miRglmm only method not sig
+miRNA_plot="hsa-miR-25-3p"#"hsa-miR-100-5p"#
+
+f1=fits[["miRglmm"]][[miRNA_plot]]
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`-fixef(f1)[1]
+groupB=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`+ranef(f1)$sequence$col_grouptestes+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA, "sequence"=rownames(ranef(f1)$sequence))
+groupB=data.frame("estimate"=groupB, "sequence"=rownames(ranef(f1)$sequence))
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df=rbind(groupA, groupB)
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]-fixef(f1)[1]
+groupB=fixef(f1)[1]+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_overall=rbind(groupA, groupB)
+
+miRNA_sub=fits[["miRglmnb"]][[miRNA_plot]]
+groupA=coef(miRNA_sub)[1]-coef(miRNA_sub)[1]
+groupB=coef(miRNA_sub)[1]+coef(miRNA_sub)[2]-coef(miRNA_sub)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_miRNA=rbind(groupA, groupB)
+
+p4=ggplot(comb_df, aes(x=Pool, y=estimate, group=sequence, color="miRglmm isomiR estimates (random effects)"))+geom_line(alpha=0.5)+geom_point(alpha=0.5)+
+  geom_line(data=comb_df_overall, aes(x=Pool, y=estimate, group=1, color="miRglmm estimates (fixed effects)"), size=2)+
+  geom_line(data=comb_df_miRNA, aes(x=Pool, y=estimate, group=1, color="aggregated method estimates"), size=2)+xlab("tissue")+
+  scale_y_continuous(breaks=log(c(10,1,0.1, 0.01)), labels=c(10,1,0.1, 0.01), limits=c(log(0.09),NA))+
+  ylab(paste('Expression relative to', '\n', 'average bladder expression'))+scale_x_discrete(expand=c(0.1,0))+xlab('x')+
+  scale_color_manual(name="", values=c("miRglmm estimates (fixed effects)"="red", "miRglmm isomiR estimates (random effects)"="black", "aggregated method estimates"="blue"))+
+  ggtitle("hsa-miR-25-3p")+
+  theme(legend.position="none",
+        plot.title=element_text(size=20, hjust=0.5), 
+        axis.title.x=element_blank(), axis.title=element_text(size=20), axis.text=element_text(size=20))
+
+#ggsave("figures/figure5_D.tif", plot=last_plot(), device="tiff", width=6.98, height=4.84, units="in", dpi=320, bg="white")
 
 
-########## panel C 
-load(file='bladder_testes_results/filter_neg1_processed_results.rda')
-LRTp=data.frame(results[["LRTp"]])
-p5=ggplot(LRTp, aes(x=LRTp))+geom_histogram(color="black", fill="gray", bins=50)+xlab('Likelihood Ratio Test p-value')+ylab('number of miRNA')+
-  theme(axis.title.x=element_text(size=15), axis.title.y=element_text(size=15),
-        axis.text.x=element_text(size=15), axis.text.y=element_text(size=15))
-#ggsave("figures/figure4C.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
 
+############################# miRglmm only method not sig
+miRNA_plot="hsa-miR-423-5p"#
+
+f1=fits[["miRglmm"]][[miRNA_plot]]
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`-fixef(f1)[1]
+groupB=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`+ranef(f1)$sequence$col_grouptestes+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA, "sequence"=rownames(ranef(f1)$sequence))
+groupB=data.frame("estimate"=groupB, "sequence"=rownames(ranef(f1)$sequence))
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df=rbind(groupA, groupB)
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]-fixef(f1)[1]
+groupB=fixef(f1)[1]+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_overall=rbind(groupA, groupB)
+
+miRNA_sub=fits[["miRglmnb"]][[miRNA_plot]]
+groupA=coef(miRNA_sub)[1]-coef(miRNA_sub)[1]
+groupB=coef(miRNA_sub)[1]+coef(miRNA_sub)[2]-coef(miRNA_sub)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_miRNA=rbind(groupA, groupB)
+
+p5=ggplot(comb_df, aes(x=Pool, y=estimate, group=sequence, color="miRglmm isomiR estimates (random effects)"))+geom_line(alpha=0.5)+geom_point(alpha=0.5)+
+  geom_line(data=comb_df_overall, aes(x=Pool, y=estimate, group=1, color="miRglmm estimates (fixed effects)"), size=2)+
+  geom_line(data=comb_df_miRNA, aes(x=Pool, y=estimate, group=1, color="aggregated method estimates"), size=2)+xlab("tissue")+
+  scale_y_continuous(breaks=log(c(10,1,0.1, 0.01)), labels=c(10,1,0.1, 0.01))+
+  ylab(paste('Expression relative to', '\n', 'average bladder expression'))+scale_x_discrete(expand=c(0.1,0))+xlab('x')+
+  scale_color_manual(name="", values=c("miRglmm estimates (fixed effects)"="red", "miRglmm isomiR estimates (random effects)"="black", "aggregated method estimates"="blue"))+
+  ggtitle("hsa-miR-423-5p")+
+  theme(legend.position="none",
+        plot.title=element_text(size=20, hjust=0.5),
+        axis.title.x=element_blank(), axis.title=element_text(size=20), axis.text=element_text(size=20))
+
+#ggsave("figures/figure5_E.tif", plot=last_plot(), device="tiff", width=6.98, height=4.84, units="in", dpi=320, bg="white")
+
+
+############################# miRglmm  and agg very diff
+miRNA_plot="hsa-miR-664a-5p.SNPC"#
+
+f1=fits[["miRglmm"]][[miRNA_plot]]
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`-fixef(f1)[1]
+groupB=fixef(f1)[1]+ranef(f1)$sequence$`(Intercept)`+ranef(f1)$sequence$col_grouptestes+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA, "sequence"=rownames(ranef(f1)$sequence))
+groupB=data.frame("estimate"=groupB, "sequence"=rownames(ranef(f1)$sequence))
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df=rbind(groupA, groupB)
+
+#pull out individual sequence estimates
+groupA=fixef(f1)[1]-fixef(f1)[1]
+groupB=fixef(f1)[1]+fixef(f1)[2]-fixef(f1)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_overall=rbind(groupA, groupB)
+
+miRNA_sub=fits[["miRglmnb"]][[miRNA_plot]]
+groupA=coef(miRNA_sub)[1]-coef(miRNA_sub)[1]
+groupB=coef(miRNA_sub)[1]+coef(miRNA_sub)[2]-coef(miRNA_sub)[1]
+groupA=data.frame("estimate"=groupA)
+groupB=data.frame("estimate"=groupB)
+groupA$Pool="Bladder"
+groupB$Pool="Testes"
+comb_df_miRNA=rbind(groupA, groupB)
+
+p6=ggplot(comb_df, aes(x=Pool, y=estimate, group=sequence, color="miRglmm isomiR estimates (random effects)"))+geom_line(alpha=0.5)+geom_point(alpha=0.5)+
+  geom_line(data=comb_df_overall, aes(x=Pool, y=estimate, group=1, color="miRglmm estimates (fixed effects)"), size=2)+
+  geom_line(data=comb_df_miRNA, aes(x=Pool, y=estimate, group=1, color="aggregated method estimates"), size=2)+
+  scale_y_continuous(breaks=log(c(10,1,0.1, 0.01)), labels=c(10,1,0.1, 0.01), limits=c(-3, NA))+
+  ylab(paste('Expression relative to', '\n', 'average bladder expression'))+scale_x_discrete(expand=c(0.1,0))+
+  scale_color_manual(name="", values=c("miRglmm estimates (fixed effects)"="red", "miRglmm isomiR estimates (random effects)"="black", "aggregated method estimates"="blue"))+
+  ggtitle("hsa-miR-664a-5p")+
+  theme(legend.position="none",
+        plot.title=element_text(size=20, hjust=0.5), 
+        axis.title.x=element_blank(),
+        axis.title=element_text(size=20), axis.text=element_text(size=20))
+
+#ggsave("figures/figure5_F.tif", plot=last_plot(), device="tiff", width=6.98, height=4.84, units="in", dpi=320, bg="white")
 
 library(ggpubr)
-ggarrange(ggarrange(p1, p2, p3, p4, ncol=2, nrow=2), ggarrange(NULL,p5, nrow=2), ncol=2)
-ggsave("figures/figure5.tif", plot=last_plot(), device="tiff", width=12.8, height=6.64, units="in", dpi=320, bg="white")
+ggarrange(p1, p2, p3, p4, p5, p6, nrow=2, ncol=3)
+
+ggsave("figures/figure5.tif", plot=last_plot(), device="tiff", width=16.8, height=9, units="in", dpi=320, bg="white")

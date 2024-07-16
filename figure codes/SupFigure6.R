@@ -1,132 +1,131 @@
+library(irr)
+library(vcd)
 library(ggplot2)
 
-########boxplots
-#load truth data
-ratio_pool=read.csv(file="ERCC files/FINAL_Ratiometric_SynthA_and_SynthB-1_fixlast3.csv", sep="\t")
-ratio_pool$A=as.numeric(gsub("x","",ratio_pool$X.SAMPLE.A.))
-ratio_pool$B=as.numeric(gsub("x","",ratio_pool$X.SAMPLE.B.))
-ratio_pool$ratio=ratio_pool$B/ratio_pool$A
-ratio_pool$true_logFC=log(ratio_pool$ratio)
-out=ratio_pool["true_logFC"]
-rownames(out)=ratio_pool$ratio.seqID
+load(file='study 89/results/filter_neg1_processed_results.rda')
+contrast_in="Monocyte vs B lymphocyte"
+
+beta_df=data.frame(results[["beta_hat"]])
+beta_df=beta_df[which(beta_df$contrast==contrast_in),]
+p_df=data.frame(results[["pvals"]])
+p_df=p_df[which(p_df$contrast==contrast_in),]
+#adjust pvalue for number of miRNA analyzed (dont correct for all contrasts performed)
+padj_df=matrix(, nrow=dim(p_df)[1], ncol=dim(p_df)[2]-1)
+for (ind in seq(1,dim(p_df)[2]-1)){
+  padj_df[,ind]=p.adjust(p_df[,ind], method="BH")
+ }
+sig_df=data.frame(padj_df<0.05)
+sig_df$contrast=p_df$contrast
+colnames(sig_df)=colnames(data.frame(p_df))
+rownames(sig_df)=rownames(data.frame(p_df))
 
 
 
-#load processed results
-load('ERCC/allfilters_processed_results.rda')
 
-
-beta_hat=results[["beta_hat"]]
-beta_hat=transform(merge(beta_hat, out, by='row.names'), row.names=Row.names, Row.names=NULL)
-beta_hat=beta_hat[,c("filter..1", "no.filter","miRglmnb","DESeq2","edgeR","limmavoom", "true_logFC")]
-colnames(beta_hat)=c("miRglmm filter -1","miRglmm no filter","NB GLM","DESeq2","edgeR","limma-voom", "True LogFC")
-
-diff=beta_hat[,!(colnames(beta_hat)=="True LogFC")]-beta_hat[,"True LogFC"]
-diff_long=stack(diff)
-colnames(diff_long)=c("diff", "method")
-diff_long$`True LogFC`=as.factor(round(as.numeric(as.character(rep(exp(beta_hat[,"True LogFC"]), times=ncol(diff)))), digits=2))
-
-p1=ggplot(diff_long, aes(x=`True LogFC`, y=diff, fill=method))+geom_boxplot()+
-  ylab('Pool LogFC Estimate-Truth')+xlab('True Pool Fold Change')+theme(axis.title=element_text(size=15),
-                                                                              axis.text=element_text(size=15),
-                                                                              legend.title=element_text(size=15),
-                                                                              legend.text=element_text(size=15))
-p1_nolegend=ggplot(diff_long, aes(x=`True LogFC`, y=diff, fill=method))+geom_boxplot()+
-  ylab('Pool LogFC Estimate-Truth')+xlab('True Pool Fold Change')+theme(axis.title=element_text(size=15),
-                                                                         axis.text=element_text(size=15),
-                                                                         legend.position="none")
-
-#ggsave("figures/figure6A.tif", plot=last_plot(), device="tiff", width=8.4, height=4.88, units="in", dpi=320, bg="white")
-
-######## MSE by filter
-library(tidyverse)
-library(reshape2)
-library(lme4)
-library(SummarizedExperiment)
-library(DESeq2)
-library(edgeR)
-
-#load truth data
-ratio_pool=read.csv(file="ERCC files/FINAL_Ratiometric_SynthA_and_SynthB-1_fixlast3.csv", sep="\t")
-ratio_pool$A=as.numeric(gsub("x","",ratio_pool$X.SAMPLE.A.))
-ratio_pool$B=as.numeric(gsub("x","",ratio_pool$X.SAMPLE.B.))
-ratio_pool$ratio=ratio_pool$B/ratio_pool$A
-ratio_pool$true_logFC=log(ratio_pool$ratio)
-out=ratio_pool["true_logFC"]
-rownames(out)=ratio_pool$ratio.seqID
+#create interaction significant groups of all aggregated methods vs miRglmm
+sig_groups_v_miRglmm=data.frame("contrast"=sig_df$contrast, "miRglmnb"=as.character(interaction(sig_df$miRglmm, sig_df$miRglmnb)), "DESeq2"=as.character(interaction(sig_df$miRglmm, sig_df$DESeq2)),
+                      "edgeR"=as.character(interaction(sig_df$miRglmm, sig_df$edgeR)), "limmavoom"=as.character(interaction(sig_df$miRglmm, sig_df$limmavoom)))
+rownames(sig_groups_v_miRglmm)=rownames(sig_df)
 
 
 
-#load processed results
-load('ERCC/filter_agg_betahats.rda')
+sig_groups_v_miRglmm[sig_groups_v_miRglmm=="TRUE.TRUE"]="significant for both"
+sig_groups_v_miRglmm[sig_groups_v_miRglmm=="TRUE.FALSE"]="significant for miRglmm only"
+sig_groups_v_miRglmm[sig_groups_v_miRglmm=="FALSE.TRUE"]="significant for aggregation method only"
+sig_groups_v_miRglmm[sig_groups_v_miRglmm=="FALSE.FALSE"]="significant for neither"
 
-filters=c("no filter", "-1", "-0.5", "0", "0.5", "1", "1.5", "2")
+#combine with the betas to make sure miRNAs align with correct beta
+comb_df=transform(merge(beta_df, sig_groups_v_miRglmm, by='row.names'), row.names=Row.names, Row.names=NULL)
 
 
-#combine filtered agg with filtered seq models to get table of betas for each model
-for (ind in seq(1, length(filters))){
-  filter_in=filters[ind]
-  beta_hat_in=beta_hat[[filter_in]]
-  beta_hat_in=transform(merge(beta_hat_in, out, by='row.names'), row.names=Row.names, Row.names=NULL)
-  diff_squared=(beta_hat_in[,!(colnames(beta_hat_in)=="true_logFC")]-beta_hat_in[,"true_logFC"])^2
+#calculate ICC and Kappa to include in plotting
+
+icc_out=data.frame(icc=t(sapply(seq(2,5), function(x) icc(comb_df[, c(1,x)], model="oneway", type="agreement", unit="single")$value)))
+colnames(icc_out)=colnames(comb_df)[2:5]
+kappa_out=data.frame(kappa=t(sapply(seq(2,5), function(x) Kappa(table(sig_df[,1], sig_df[,x]))[["Unweighted"]][["value"]])))
+colnames(kappa_out)=colnames(sig_df)[2:5]
+
+
+
+#idx=which(rownames(comb_df)=="hsa-miR-27a-3p")
+#scatter plots
+p1=ggplot(comb_df, aes(x=miRglmnb.x, y=miRglmm, color=miRglmnb.y))+geom_point(size=3)+geom_abline()+xlab('NB GLM logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
+  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$miRglmnb.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$miRglmnb,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
+  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
+        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
+  #annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
+
+
+
+p2=ggplot(comb_df, aes(x=DESeq2.x, y=miRglmm, color=DESeq2.y))+geom_point(size=3)+geom_abline()+xlab('DESeq2 logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
+  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$DESeq2.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$DESeq2,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
+theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
+      axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
+#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
+
+
+
+p3=ggplot(comb_df, aes(x=edgeR.x, y=miRglmm, color=edgeR.y))+geom_point(size=3)+geom_abline()+xlab('edgeR logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
+  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$edgeR.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$edgeR,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
+  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
+        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
+#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
   
-  if (ind==1){
-    MSE=data.frame(colMeans(diff_squared, na.rm=TRUE))
-  } else {
-    MSE=cbind(MSE, data.frame(colMeans(diff_squared, na.rm=TRUE)))
-  }
+
+p4=ggplot(comb_df, aes(x=limmavoom.x, y=miRglmm, color=limmavoom.y))+geom_point(size=3)+geom_abline()+xlab('limma-voom logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
+  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$limmavoom.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$limmavoom,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
+  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
+        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15), legend.position="none")#+
+#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
   
-}
-idx=which(rownames(MSE)=="miRglmnb")
-rownames(MSE)[idx]="NB GLM"
-idx=which(rownames(MSE)=="limmavoom")
-rownames(MSE)[idx]="limma-voom"
-colnames(MSE)=filters
-MSE_long=stack(MSE)
-colnames(MSE_long)=c("MSE", "filter")
-MSE_long$method=rep(rownames(MSE), times=ncol(MSE))
-MSE_long$method=factor(MSE_long$method, levels=c("miRglmm", "miRglmm2", "NB GLM", "DESeq2", "edgeR", "limma-voom"))
-MSE_long$MSE=MSE_long$MSE*1000
-p2=ggplot(MSE_long, aes(x=filter, y=MSE, group=method, color=method))+
-  scale_color_discrete(drop=FALSE,labels=c("miRglmm", "NB GLM", "DESeq2", "edgeR", "limma-voom"), 
-                                  breaks=c("miRglmm", "NB GLM", "DESeq2", "edgeR", "limma-voom"))+
-  geom_line(size=2)+xlab('filter (log(median CPM))')+theme(axis.title=element_text(size=15),
-                    axis.text=element_text(size=15),
-                    legend.title=element_text(size=15),
-                    legend.text=element_text(size=15),
-                    legend.position="bottom")+ylab(expression(paste("MSE (10"^"-3", ")")))
+p4_legend=ggplot(comb_df, aes(x=limmavoom.x, y=miRglmm, color=limmavoom.y))+geom_point(size=3)+geom_abline()+xlab('limma-voom logFC')+ylab('miRglmm logFC')+scale_colour_discrete(drop=FALSE)+labs(color="Significance")+
+  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out$limmavoom.x,2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out$limmavoom,2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
+  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
+        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15))#+
+#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
 
-p2_nolegend=ggplot(MSE_long, aes(x=filter, y=MSE, group=method, color=method))+
-  scale_color_discrete(drop=FALSE, labels=c("miRglmm", "NB GLM", "DESeq2", "limma-voom"), 
-                                   breaks=c("miRglmm", "NB GLM", "DESeq2", "limma-voom"))+
-  geom_line(size=2)+xlab('filter (log(median CPM))')+theme(axis.title=element_text(size=15),
-                          axis.text=element_text(size=15),
-                          legend.position="none")+ylab(expression(paste("MSE (10"^"-3", ")")))
+  ggsave("figures/supfigure6_legend.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
 
-#ggsave("figures/figure6B.tif", plot=last_plot(), device="tiff", width=4.2, height=4.88, units="in", dpi=320, bg="white")
+###########panel B upset plot
+library(UpSetR)
 
-######## histogram
-library(ggplot2)
-load(file='ERCC/allfilters_processed_results.rda')
-LRTp=data.frame(LRTp=results[["LRTp"]][["filter..1"]])
-p3=ggplot(LRTp, aes(x=LRTp))+geom_histogram(color="black", fill="gray", bins=50)+
-  xlab('Likelihood Ratio Test p-value')+ylab('number of miRNA')+xlim(c(0,NA))+theme(axis.title=element_text(size=15),
-                                                             axis.text=element_text(size=15),
-                                                             legend.title=element_text(size=15),
-                                                             legend.text=element_text(size=15))
+#find edgeR significance from fit object
+#load(file='bladder_testes_results/filter_neg1_results.rda')
+#sig_df_edgeR=data.frame('edgeR'=fits[["edgeR"]][["table"]][["PValue"]]<0.05)
+#rownames(sig_df_edgeR)=rownames(fits[["edgeR"]][["table"]])
+#sig_df=transform(merge(sig_df, sig_df_edgeR, by='row.names'), row.names=Row.names, Row.names=NULL)
 
 
 
-#ggsave("figures/figure6C.tif", plot=last_plot(), device="tiff", width=4.2, height=4.88, units="in", dpi=320, bg="white")
+
+list_Input=list(miRglmm=rownames(sig_df)[sig_df$miRglmm==TRUE], DESeq2=rownames(sig_df)[sig_df$DESeq2==TRUE],`NB GLM`=rownames(sig_df)[sig_df$miRglmnb==TRUE], 
+                edgeR=rownames(sig_df)[sig_df$edgeR==TRUE], `limma-voom`=rownames(sig_df)[sig_df$limmavoom==TRUE])
+
+myplot=upset(fromList(list_Input), order.by="freq", mainbar.y.label="Number of common significant miRNA",
+             sets.x.label="Significant miRNA", text.scale=c(2, 2, 2,2,2,2))
+
+tiff(file="figures/supfigure6B.tif", height=6.74, width=8.9, units="in", res=320)
+print(myplot)
+dev.off()
+
+
+# upset_ind=myplot[["New_data"]]
+# x1=unlist(list_Input, use.names=TRUE)
+# x1=x1[!duplicated(x1)]
+# idx=which(upset_ind$miRglmm==1 & upset_ind$DESeq2==0 & upset_ind$edgeR==0 & upset_ind$`limma-voom`==0 & upset_ind$`NB GLM`==0)
+# x1[idx]
+# idx=which(upset_ind$miRglmm==0 & upset_ind$DESeq2==1 & upset_ind$edgeR==1 & upset_ind$`limma-voom`==1 & upset_ind$`NB GLM`==1)
+# x1[idx]
+
+
+########## panel C 
+LRTp=data.frame(results[["LRTp"]])
+p5=ggplot(LRTp, aes(x=LRTp))+geom_histogram(color="black", fill="gray", bins=50)+xlab('Likelihood Ratio Test p-value')+ylab('number of miRNA')+
+  theme(axis.title.x=element_text(size=15), axis.title.y=element_text(size=15),
+        axis.text.x=element_text(size=15), axis.text.y=element_text(size=15))
+#ggsave("figures/figure4C.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
+
 
 library(ggpubr)
-#ggarrange(p1, ggarrange(p2,p3,ncol=2), nrow=2)
-plot(p1)
-ggsave("figures/figure6A_legend.tif", plot=last_plot(), device="tiff", width=11.83, height=3.25, units="in", dpi=320, bg="white")
-
-plot(p2)
-ggsave("figures/figure6B_legend.tif", plot=last_plot(), device="tiff", width=11.83, height=3.25, units="in", dpi=320, bg="white")
-
-
-ggarrange(p1_nolegend, ggarrange(p2_nolegend,p3,ncol=2), nrow=2)
-ggsave("figures/SupFigure6.tif", plot=last_plot(), device="tiff", width=11.83, height=6.53, units="in", dpi=320, bg="white")
+ggarrange(ggarrange(p1, p2, p3, p4, ncol=2, nrow=2), ggarrange(NULL,p5, nrow=2), ncol=2)
+ggsave("figures/supfigure6.tif", plot=last_plot(), device="tiff", width=12.8, height=6.64, units="in", dpi=320, bg="white")

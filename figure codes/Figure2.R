@@ -1,174 +1,112 @@
+### summarize simulation results by truth via boxplots
+library(reshape2)
 library(ggplot2)
 
-load("bladder_testes_data_subset_filtered2.rda")
-miRNA_counts = apply(assay(bladder_testes_data_subset_filtered2), 2, function(x) by(x, rowData(bladder_testes_data_subset_filtered2)$miRNA, sum))
-total_counts=colSums(assay(bladder_testes_data_subset_filtered2))
 
-#find canonical sequences from ERCC file
-ratio_pool=read.csv(file="ERCC files/FINAL_Ratiometric_SynthA_and_SynthB-1_fixlast3.csv", sep="\t")
+############# MSE by truth boxplots
+load(file="sim results/sims_N100_m2_s1_rtruncnorm13_combinedresults.rda")
+uniq_miRNA=seq(1,length(results[["MSE_sim_by_truth"]]))
 
+out_miRglmm=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["miRglmm"]]))))
+colnames(out_miRglmm)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_miRglmm$method="miRglmm"
 
+out_miRglmnb=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["miRglmnb"]]))))
+colnames(out_miRglmnb)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_miRglmnb$method="NB GLM"
 
-########################################Figure 1A
-miRNA_plot="hsa-let-7g-5p"
+out_DESeq2=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["DESeq2"]]))))
+colnames(out_DESeq2)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_DESeq2$method="DESeq2"
 
-#find aggregated counts
-agg_choose=data.frame(count=miRNA_counts[rownames(miRNA_counts)==miRNA_plot,])
-agg_choose$total_counts=total_counts
-agg_choose$cpm=agg_choose$count/(agg_choose$total_counts/1000000)
-agg_choose$sequence="aggregated"
-agg_choose$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
+out_edgeR=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["edgeR"]]))))
+colnames(out_edgeR)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_edgeR$method="edgeR"
 
-# calculate sequence median CPM expression
-idx=which(rowData(bladder_testes_data_subset_filtered2)$miRNA==miRNA_plot)
-Y_all_sub=t(assay(bladder_testes_data_subset_filtered2)[idx,])
-Y_seq_labels_sub=rowData(bladder_testes_data_subset_filtered2)$uniqueSequence[idx]
-cpm_sub=Y_all_sub/(total_counts/1000000)
-median_cpm_sub=apply(cpm_sub, 2, median)
-logmedCPM=data.frame(sequence=Y_seq_labels_sub, logmedCPM=log(median_cpm_sub))
+out_limvoom=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["limmavoom"]]))))
+colnames(out_limvoom)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_limvoom$method="limma-voom"
 
-#find canonical sequence
-ratio_pool_in=subset(ratio_pool, ratio.seqID==miRNA_plot)
-data_canon=data.frame(cpm=cpm_sub[, which(Y_seq_labels_sub==ratio_pool_in$sequence)])
-data_canon$sequence="canonical" #ratio_pool_in$sequence
-data_canon$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
+out_all=rbind(out_miRglmm, out_miRglmnb, out_DESeq2, out_edgeR, out_limvoom)
+data_long = melt(out_all, 
+                 id.vars = c("method"),
+                 variable.name = "truth", 
+                 value.name = "MSE")
 
-
-
-# from remaining sequences find the top two expressing sequences
-data_left=data.frame(as.matrix(cpm_sub[, which(Y_seq_labels_sub!=ratio_pool_in$sequence)]))
-colnames(data_left)=Y_seq_labels_sub[which(Y_seq_labels_sub!=ratio_pool_in$sequence)]
-logmedCPM_left=subset(logmedCPM, sequence %in% colnames(data_left))
-next_two_seq=logmedCPM_left$sequence[order(logmedCPM_left$logmedCPM, decreasing=TRUE)[1:2]]
-data_next_one=data.frame(cpm=data_left[, which(colnames(data_left)==next_two_seq[1])])
-data_next_one$sequence="isomiR 1"#next_two_seq[1]
-data_next_one$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-
-data_next_two=data.frame(cpm=data_left[, which(colnames(data_left)==next_two_seq[2])])
-data_next_two$sequence="isomiR 2"#next_two_seq[2]
-data_next_two$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-data_next_two=rbind(data_next_one, data_next_two)
-
-#boxplots
-data_comb=rbind(agg_choose[, c("cpm", "sequence", "col_group")], data_canon[,c("cpm", "sequence", "col_group")],
-                data_next_two[, c("cpm", "sequence", "col_group")])
-data_comb$sequence=factor(data_comb$sequence, levels=unique(data_comb$sequence))
-p1=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+
-  theme(strip.text = element_text(size=12), axis.text.x=element_text(size=15), axis.title.x=element_blank(),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.text=element_text(size=15),
-        legend.title=element_text(size=15), plot.title=element_text(size=15, hjust=0.5))+
-  labs(fill="tissue")+ggtitle(miRNA_plot)
+data_long$`True LogFC`=as.factor(round(exp(as.numeric(as.character(data_long$truth))), digits=2))
+data_long$method=factor(data_long$method, levels=c("miRglmm", "empty", "NB GLM", "DESeq2", "edgeR", "limma-voom"))
+data_long$MSE=data_long$MSE*1000
+p1=ggplot(data_long, aes(x=`True LogFC`, y=MSE, fill=method))+geom_boxplot()+ylab(expression(paste("MSE (10"^"-3", ")")))+
+  xlab('True Fold Change')+
+  scale_fill_discrete(drop=FALSE, labels=c("miRglmm", "NB GLM", "DESeq2", "edgeR", "limma-voom"), 
+                      breaks=c("miRglmm", "NB GLM", "DESeq2", "edgeR", "limma-voom"))+
+                                        theme(axis.title=element_text(size=15),
+                                         axis.text=element_text(size=15),
+                                         legend.title=element_text(size=15),
+                                         legend.text=element_text(size=15),
+                                         legend.position="bottom")
+print(p1)
+#ggsave("figures/figure15A.tif", plot=last_plot(), device="tiff", width=300, height=150, units="mm", dpi=320, bg="white")
 
 
-#ggsave(paste0("figures/Fig2A_", miRNA_plot, ".tif"), plot=last_plot(), device="tiff", scale=3, width=60, height=50, units="mm", dpi=320, bg="white")
+############# coverage probability by truth boxplots
+
+uniq_miRNA=seq(1,length(results[["coverage_prob_sim_by_truth"]]))
+
+out_miRglmm=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["coverage_prob_sim_by_truth"]][[row]][["miRglmm"]]))))
+colnames(out_miRglmm)=results[["coverage_prob_sim_by_truth"]][[1]][["true_beta"]]
+out_miRglmm$method="miRglmm"
+
+out_miRglmnb=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["coverage_prob_sim_by_truth"]][[row]][["miRglmnb"]]))))
+colnames(out_miRglmnb)=results[["coverage_prob_sim_by_truth"]][[1]][["true_beta"]]
+out_miRglmnb$method="NB GLM"
+
+out_DESeq2=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["coverage_prob_sim_by_truth"]][[row]][["DESeq2"]]))))
+colnames(out_DESeq2)=results[["coverage_prob_sim_by_truth"]][[1]][["true_beta"]]
+out_DESeq2$method="DESeq2"
+
+out_limvoom=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["coverage_prob_sim_by_truth"]][[row]][["limmavoom"]]))))
+colnames(out_limvoom)=results[["coverage_prob_sim_by_truth"]][[1]][["true_beta"]]
+out_limvoom$method="limma-voom"
+
+out_all=rbind(out_miRglmm, out_miRglmnb, out_DESeq2, out_limvoom)
+data_long = melt(out_all, 
+                 id.vars = c("method"),
+                 variable.name = "truth", 
+                 value.name = "coverage probability")
+
+data_long$`True LogFC`=as.factor(round(exp(as.numeric(as.character(data_long$truth))), digits=3))
+data_long$method=factor(data_long$method, levels=c("miRglmm", "empty", "NB GLM", "DESeq2", "edgeR", "limma-voom"))
+p2=ggplot(data_long, aes(x=`True LogFC`, y=`coverage probability`, fill=method))+geom_boxplot()+
+  ylab('coverage proportion')+xlab('True Fold Change')+
+  scale_fill_discrete(drop=FALSE, labels=c("miRglmm", "NB GLM", "DESeq2", "limma-voom"), 
+                      breaks=c("miRglmm", "NB GLM", "DESeq2", "limma-voom"))+
+  theme(axis.title=element_text(size=15), axis.text=element_text(size=15),
+        legend.title=element_text(size=15),
+        legend.text=element_text(size=15),
+        legend.position="bottom")
+print(p2)
+#ggsave("figures/figure15B.tif", plot=last_plot(), device="tiff", width=300, height=150, units="mm", dpi=320, bg="white")
 
 
+############# proportion of significant random effects by truth
+uniq_miRNA=seq(1,length(results[["prop_sig_by_truth"]]))
 
-########################################Figure 1B
-miRNA_plot="hsa-miR-26a-5p"
+out_all=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["prop_sig_by_truth"]][[row]][["sig"]]))))
+colnames(out_all)=results[["prop_sig_by_truth"]][[1]][["true_beta"]]
+data_long = melt(out_all, 
+                 variable.name = "truth", 
+                 value.name = "proportion significant")
+data_long$`True LogFC`=as.factor(round(exp(as.numeric(as.character(data_long$truth))), digits=3))
 
-#find aggregated counts
-agg_choose=data.frame(count=miRNA_counts[rownames(miRNA_counts)==miRNA_plot,])
-agg_choose$total_counts=total_counts
-agg_choose$cpm=agg_choose$count/(agg_choose$total_counts/1000000)
-agg_choose$sequence="aggregated"
-agg_choose$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-
-# calculate sequence median CPM expression
-idx=which(rowData(bladder_testes_data_subset_filtered2)$miRNA==miRNA_plot)
-Y_all_sub=t(assay(bladder_testes_data_subset_filtered2)[idx,])
-Y_seq_labels_sub=rowData(bladder_testes_data_subset_filtered2)$uniqueSequence[idx]
-cpm_sub=Y_all_sub/(total_counts/1000000)
-median_cpm_sub=apply(cpm_sub, 2, median)
-logmedCPM=data.frame(sequence=Y_seq_labels_sub, logmedCPM=log(median_cpm_sub))
-
-#find canonical sequence
-ratio_pool_in=subset(ratio_pool, ratio.seqID==miRNA_plot)
-data_canon=data.frame(cpm=cpm_sub[, which(Y_seq_labels_sub==ratio_pool_in$sequence)])
-data_canon$sequence="canonical" #ratio_pool_in$sequence
-data_canon$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-
-
-
-# from remaining sequences find the top two expressing sequences
-data_left=data.frame(as.matrix(cpm_sub[, which(Y_seq_labels_sub!=ratio_pool_in$sequence)]))
-colnames(data_left)=Y_seq_labels_sub[which(Y_seq_labels_sub!=ratio_pool_in$sequence)]
-logmedCPM_left=subset(logmedCPM, sequence %in% colnames(data_left))
-next_two_seq=logmedCPM_left$sequence[order(logmedCPM_left$logmedCPM, decreasing=TRUE)[1:2]]
-data_next_one=data.frame(cpm=data_left[, which(colnames(data_left)==next_two_seq[1])])
-data_next_one$sequence="isomiR 1"#next_two_seq[1]
-data_next_one$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-
-data_next_two=data.frame(cpm=data_left[, which(colnames(data_left)==next_two_seq[2])])
-data_next_two$sequence="isomiR 2"#next_two_seq[2]
-data_next_two$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-data_next_two=rbind(data_next_one, data_next_two)
-
-#boxplots
-data_comb=rbind(agg_choose[, c("cpm", "sequence", "col_group")], data_canon[,c("cpm", "sequence", "col_group")],
-                data_next_two[, c("cpm", "sequence", "col_group")])
-data_comb$sequence=factor(data_comb$sequence, levels=unique(data_comb$sequence))
-p2=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+
-  theme(strip.text = element_text(size=12), axis.text.x=element_text(size=15), axis.title.x=element_blank(),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.text=element_text(size=15),
-        legend.title=element_text(size=15), plot.title=element_text(size=15, hjust=0.5))+
-  labs(fill="tissue")+ggtitle(miRNA_plot)
-
-
-
-
-########################################Figure 1C
-miRNA_plot="hsa-let-7a-5p"
-
-#find aggregated counts
-agg_choose=data.frame(count=miRNA_counts[rownames(miRNA_counts)==miRNA_plot,])
-agg_choose$total_counts=total_counts
-agg_choose$cpm=agg_choose$count/(agg_choose$total_counts/1000000)
-agg_choose$sequence="aggregated"
-agg_choose$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-
-# calculate sequence median CPM expression
-idx=which(rowData(bladder_testes_data_subset_filtered2)$miRNA==miRNA_plot)
-Y_all_sub=t(assay(bladder_testes_data_subset_filtered2)[idx,])
-Y_seq_labels_sub=rowData(bladder_testes_data_subset_filtered2)$uniqueSequence[idx]
-cpm_sub=Y_all_sub/(total_counts/1000000)
-median_cpm_sub=apply(cpm_sub, 2, median)
-logmedCPM=data.frame(sequence=Y_seq_labels_sub, logmedCPM=log(median_cpm_sub))
-
-#find canonical sequence
-ratio_pool_in=subset(ratio_pool, ratio.seqID==miRNA_plot)
-data_canon=data.frame(cpm=cpm_sub[, which(Y_seq_labels_sub==ratio_pool_in$sequence)])
-data_canon$sequence="canonical" #ratio_pool_in$sequence
-data_canon$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-
-
-
-# from remaining sequences find the top two expressing sequences
-data_left=data.frame(as.matrix(cpm_sub[, which(Y_seq_labels_sub!=ratio_pool_in$sequence)]))
-colnames(data_left)=Y_seq_labels_sub[which(Y_seq_labels_sub!=ratio_pool_in$sequence)]
-logmedCPM_left=subset(logmedCPM, sequence %in% colnames(data_left))
-next_two_seq=logmedCPM_left$sequence[order(logmedCPM_left$logmedCPM, decreasing=TRUE)[1:2]]
-data_next_one=data.frame(cpm=data_left[, which(colnames(data_left)==next_two_seq[1])])
-data_next_one$sequence="isomiR 1"#next_two_seq[1]
-data_next_one$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-
-data_next_two=data.frame(cpm=data_left[, which(colnames(data_left)==next_two_seq[2])])
-data_next_two$sequence="isomiR 2"#next_two_seq[2]
-data_next_two$col_group=colData(bladder_testes_data_subset_filtered2)$cell_tissue
-data_next_two=rbind(data_next_one, data_next_two)
-
-#boxplots
-data_comb=rbind(agg_choose[, c("cpm", "sequence", "col_group")], data_canon[,c("cpm", "sequence", "col_group")],
-                data_next_two[, c("cpm", "sequence", "col_group")])
-data_comb$sequence=factor(data_comb$sequence, levels=unique(data_comb$sequence))
-p3=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+
-  theme(strip.text = element_text(size=12), axis.text.x=element_text(size=15), axis.title.x=element_blank(),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.text=element_text(size=15),
-        legend.title=element_text(size=15), plot.title=element_text(size=15, hjust=0.5))+
-  labs(fill="tissue")+ggtitle(miRNA_plot)
-
-library(gridExtra)
-ggarrange(p1,p2,p3, ncol=1, nrow=3)
-
-#ggsave(paste0("figures/Fig2C_", miRNA_plot, ".tif"), plot=last_plot(), device="tiff", scale=3, width=60, height=50, units="mm", dpi=320, bg="white")
-ggsave("figures/figure2.tif", plot=last_plot(), device="tiff", width=12.4, height=7.3, units="in", dpi=320, bg="white")
+p3=ggplot(data_long, aes(x=`True LogFC`, y=`proportion significant`))+geom_boxplot()+
+  ylab(paste('proportion of miRNA with', '\n' , 'significant random slope effect'))+xlab('True Fold Change')+
+  theme(axis.title=element_text(size=15), axis.text=element_text(size=15),
+        legend.title=element_text(size=15),
+        legend.text=element_text(size=15),
+        legend.position="bottom")
+print(p3)
+library(ggpubr)
+#ggarrange(p1, p2, p3, nrow=2, ncol=2)
+ggarrange(p1, p2, nrow=1, ncol=2)
+ggsave("figures/figure2.tif", plot=last_plot(), device="tiff", width=17, height=11, units="in", dpi=320, bg="white")

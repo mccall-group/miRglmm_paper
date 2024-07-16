@@ -69,5 +69,5 @@ p1=ggplot(df2, aes(x=`max sequence`, y=`second max sequence`))+geom_point()+
 
 library(gridExtra)
 ggarrange(p1,p2, nrow=1, ncol=2)
-ggsave("figures/supfigure4_CD4T.tif", plot=last_plot(), device="tiff", width=14, height=6, units="in", dpi=320, bg="white")
+ggsave("figures/supfigure1_CD4T.tif", plot=last_plot(), device="tiff", width=14, height=6, units="in", dpi=320, bg="white")
 
