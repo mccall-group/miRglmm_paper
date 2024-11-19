@@ -24,7 +24,7 @@ col_group_in = colData(panel_B_filter)$Pool
 adjust_var_in=colData(panel_B_filter)$Lab
 
 source('miRglmm.R')
-source('miRglmnb.R')
+source('miRglm.R')
 
 #fit miRglmm full and reduced models
 fits=list()
@@ -42,12 +42,19 @@ fits[["filter 2"]] = miRglmm(panel_B_filter, col_group=col_group_in, ncores = nc
 
 fits[["no filter"]] = miRglmm(panel_B_filter, col_group=col_group_in, ncores = ncores, min_med_lcpm = NULL, adjust_var=adjust_var_in)
 
+# fit miRglmm poisson option 
+fits[["filter -1 poisson"]] = miRglmm(panel_B_filter, col_group=col_group_in, family="poisson", ncores = ncores, min_med_lcpm = -1, adjust_var=adjust_var_in)
+
 
 
 
 #aggregate data to miRNAs and fit miRglmnb
 miRNA_counts = t(apply(assay(panel_B_filter), 2, function(x) by(x, rowData(panel_B_filter)$miRNA, sum)))
-fits[["miRglmnb"]]= miRglmnb(miRNA_counts, col_group=col_group_in, ncores = ncores, adjust_var=adjust_var_in)
+fits[["miRglmnb"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores, adjust_var=adjust_var_in)
+fits[["miRglmpois"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores, adjust_var=adjust_var_in, family="poisson")
+#the ZI models do not run due to "invalid dependent variable, minimum count is not zero"
+#fits[["miRglmZIP"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores, adjust_var=adjust_var_in, family="ZIP")
+#fits[["miRglmZINB"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores, adjust_var=adjust_var_in, family="ZINB")
 
 if (ncores>1){
   stopCluster(cl)

@@ -4,7 +4,8 @@ library(lme4)
 library(SummarizedExperiment)
 library(foreach)
 library(doParallel)
-miRglmnb <- function(agg_data, col_group = c(rep("A", 19), rep("B",20)), ncores = 1, adjust_var=NA){
+library(pscl)
+miRglm <- function(agg_data, col_group = c(rep("A", 19), rep("B",20)), ncores = 1, adjust_var=NA, family="NB"){
   library(MASS)
   if (is.na(adjust_var)){
     adjust_var=rep(NA, length(col_group))
@@ -31,9 +32,23 @@ miRglmnb <- function(agg_data, col_group = c(rep("A", 19), rep("B",20)), ncores 
       
     }
     f1=0
+    if (family=="NB"){
     tryCatch({
       f1=glm.nb(Formula, data=data_wide, control=glm.control(maxit=1000))
     }, error=function(e){cat("ERROR :", uniq_miRNA_in)})
+    } else if (family=="poisson"){
+      tryCatch({
+        f1=glm(Formula, data=data_wide, family="poisson", control=glm.control(maxit=1000))
+      }, error=function(e){cat("ERROR :", uniq_miRNA_in)})
+    } else if (family=="ZIP"){
+      tryCatch({
+        f1=zeroinfl(as.formula(paste(Formula, "| col_group")), data=data_wide, dist="poisson")
+      }, error=function(e){cat("ERROR :", uniq_miRNA_in)})
+    } else if (family=="ZINB"){
+      tryCatch({
+        f1=zeroinfl(as.formula(paste(Formula, "| col_group")), data=data_wide, dist="negbin")
+      }, error=function(e){cat("ERROR :", uniq_miRNA_in)})
+    }
     f1_list[[uniq_miRNA[ind3]]]=f1
   }
   } else {
@@ -55,9 +70,23 @@ miRglmnb <- function(agg_data, col_group = c(rep("A", 19), rep("B",20)), ncores 
         
       }
       f1=0
+      if (family=="NB"){
       tryCatch({
         f1=glm.nb(Formula, data=data_wide, control=glm.control(maxit=1000))
       }, error=function(e){cat("ERROR :", uniq_miRNA_in)})
+      } else if (family=="poisson"){
+        tryCatch({
+          f1=glm(Formula, data=data_wide, family="poisson", control=glm.control(maxit=1000))
+        }, error=function(e){cat("ERROR :", uniq_miRNA_in)})
+      } else if (family=="ZIP"){
+        tryCatch({
+          f1=zeroinfl(as.formula(paste(Formula, "|col_group")), data=data_wide, dist="poisson")
+        }, error=function(e){cat("ERROR :", uniq_miRNA_in)})
+      } else if (family=="ZINB"){
+        tryCatch({
+          f1=zeroinfl(as.formula(paste(Formula, "|col_group")), data=data_wide, dist="negbin")
+        }, error=function(e){cat("ERROR :", uniq_miRNA_in)})
+      }
       f1_list_in=list()
       f1_list_in[[uniq_miRNA[ind3]]]=f1
       return(f1_list_in)
