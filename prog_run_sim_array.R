@@ -25,18 +25,27 @@ if (ncores>1){
 col_group_in = c(rep("A", 19), rep("B",20))
 
 source('miRglmm.R')
-source('miRglmnb.R')
+source('miRglm.R')
 
 #fit miRglmm full and reduced models
 fits = miRglmm(sims[[ind_run]]$sim_se, col_group=col_group_in, ncores = ncores)
 
+#fit miRglmm full and reduced models
+fits[["miRglmm poisson"]] = miRglmm(sims[[ind_run]]$sim_se, col_group=col_group_in, ncores = ncores, family="poisson")
+
 #aggregate data to miRNAs and fit miRglmnb
 miRNA_counts = t(apply(assay(sims[[ind_run]]$sim_se), 2, function(x) by(x, rowData(sims[[ind_run]]$sim_se)$miRNA, sum)))
-fits[["miRglmnb"]]= miRglmnb(miRNA_counts, col_group=col_group_in, ncores = ncores)
+fits[["miRglmnb"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores)
+fits[["miRglmpois"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores, family="poisson")
+
 
 if (ncores>1){
   stopCluster(cl)
 }
+# run wilcoxon 
+
+fits[["wilcoxon"]]=data.frame("wilcoxp"=apply(t(miRNA_counts), 1, function(x) wilcox.test(x[which(col_group_in=="A")], x[which(col_group_in=="B")])$p.value))
+
 
 #run DESeq2 
 panelB_raw=SummarizedExperiment(assays=list(t(miRNA_counts)), rowData=colnames(miRNA_counts), colData=col_group_in)
