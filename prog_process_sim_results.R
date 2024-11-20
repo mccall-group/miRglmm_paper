@@ -31,6 +31,14 @@ double_warn=sapply(fits[["miRglmm"]], 'typeof')
 fits[["miRglmm"]][which(double_warn=="double")]=NULL
 double_warn=sapply(fits[["miRglmm_reduced"]], 'typeof')
 fits[["miRglmm_reduced"]][which(double_warn=="double")]=NULL
+
+##### remove models where miRglmm poisson not fit
+double_warn=sapply(fits[["miRglmm poisson"]][["miRglmm"]], 'typeof')
+fits[["miRglmm poisson"]][["miRglmm"]][which(double_warn=="double")]=NULL
+double_warn=sapply(fits[["miRglmm poisson"]][["miRglmm_reduced"]], 'typeof')
+fits[["miRglmm poisson"]][["miRglmm_reduced"]][which(double_warn=="double")]=NULL
+
+
 #collect betas
 beta_hat=get_betas(fits,  var="col_group")
 
@@ -40,11 +48,19 @@ beta_hat=transform(merge(beta_hat, true_logFC_BvsA, by='row.names'), row.names=R
 #collect SEs
 SE_hat=get_SEs(fits,  var="col_group")
 
+#get pvals
+pvals=get_pvals(fits, var="col_group")
+is_sig=as.data.frame(pvals<0.05)
+pvals$true_beta=beta_hat$true_beta
+is_sig$true_beta=beta_hat$true_beta
+sig_by_truth=is_sig %>% group_by(true_beta) %>% summarise_all(funs(mean))
+
+
 #run LRT for random slope effect
 LRTp=run_LRT(fits[["miRglmm"]], fits[["miRglmm_reduced"]])
 LRTp=transform(merge(LRTp, true_logFC_BvsA, by='row.names'), row.names=Row.names, Row.names=NULL)
 LRTp$sig=(LRTp$LRTp<0.05)*1
-sig_by_truth=LRTp[, c("true_beta", "sig")] %>% group_by(true_beta) %>% summarise_all(funs(mean))
+REsig_by_truth=LRTp[, c("true_beta", "sig")] %>% group_by(true_beta) %>% summarise_all(funs(mean))
 
 #miRglmm variance components
 
@@ -55,7 +71,7 @@ n_seq=get_nseq(fits[["miRglmm"]])
 
 
 #bias
-bias=data.frame(beta_hat[, c("miRglmm","miRglmnb","DESeq2","edgeR","limmavoom")]-beta_hat$true_beta)
+bias=data.frame(beta_hat[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","edgeR","limmavoom")]-beta_hat$true_beta)
 squared_error=bias^2
 MSE_sim=t(data.frame(MSE=colMeans(squared_error)))
 squared_error$true_beta=beta_hat$true_beta
@@ -79,8 +95,10 @@ coverage_probability_sim_by_truth=coverage_indicators %>% group_by(true_beta) %>
 #create list of results
 results[["beta_hat"]][[ind_run]]=beta_hat
 results[["SE_hat"]][[ind_run]]=SE_hat
+results[["pvals"]][[ind_run]]=pvals
+results[["sig_by_truth"]][[ind_run]]=sig_by_truth
 results[["LRTp"]][[ind_run]]=LRTp
-results[["prop_sig_by_truth"]][[ind_run]]=sig_by_truth
+results[["prop_sig_by_truth"]][[ind_run]]=REsig_by_truth
 results[["var_comp"]][[ind_run]]=var_comp
 results[["squared_error"]][[ind_run]]=squared_error
 results[["n_seq"]][[ind_run]]=n_seq

@@ -22,6 +22,27 @@ get_betas <- function(model_fits, var="col_group"){
   rownames(betas)=rownames(glmm_betas)
   betas$miRglmm[which(glmm_betas$singular_warning==TRUE | is.na(glmm_betas$singular_warning))]=glmm_betas$reduced[which(glmm_betas$singular_warning==TRUE | is.na(glmm_betas$singular_warning))]
   
+  #miRglmm poisson betas
+  singular_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'isSingular')
+  #find full model betas
+  all_coeff=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], "fixef")
+  idx=which(str_detect(rownames(all_coeff), var))
+  coeff_full=data.frame("full"=all_coeff[idx,], "singular_warning"=singular_warn)
+  rownames(coeff_full)=colnames(all_coeff)
+  
+  #find reduced model betas
+  all_coeff=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], "fixef")
+  idx=which(str_detect(rownames(all_coeff), var))
+  coeff_red=data.frame("reduced"=all_coeff[idx,])
+  rownames(coeff_red)=colnames(all_coeff)
+  glmm_betas=transform(merge(coeff_full, coeff_red, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
+  #if singularity warning choose reduced model betas
+  out=data.frame('miRglmm_poiss'=glmm_betas$full)
+  rownames(out)=rownames(glmm_betas)
+  out$miRglmm_poiss[which(glmm_betas$singular_warning==TRUE | is.na(glmm_betas$singular_warning))]=glmm_betas$reduced[which(glmm_betas$singular_warning==TRUE | is.na(glmm_betas$singular_warning))]
+  betas=transform(merge(betas, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
   
   #miRglmnb betas
   double_warn=sapply(model_fits[["miRglmnb"]], 'is.double')
@@ -29,6 +50,14 @@ get_betas <- function(model_fits, var="col_group"){
   all_coeff=sapply(model_fits[["miRglmnb"]], '[[', "coefficients")
   idx=which(str_detect(rownames(all_coeff), var))
   out=data.frame('miRglmnb'=all_coeff[idx,])
+  betas=transform(merge(betas, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
+  #miRglmpoiss betas
+  double_warn=sapply(model_fits[["miRglmpois"]], 'is.double')
+  model_fits[["miRglmpois"]]=model_fits[["miRglmpois"]][double_warn==FALSE]
+  all_coeff=sapply(model_fits[["miRglmpois"]], '[[', "coefficients")
+  idx=which(str_detect(rownames(all_coeff), var))
+  out=data.frame('miRglmpois'=all_coeff[idx,])
   betas=transform(merge(betas, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
   
@@ -87,9 +116,40 @@ get_SEs <- function(model_fits, var="col_group"){
   SEs$miRglmm[which(glmm_SEs$singular_warning==TRUE | is.na(glmm_SEs$singular_warning))]=glmm_SEs$SE_red[which(glmm_SEs$singular_warning==TRUE | is.na(glmm_SEs$singular_warning))]
   
   
+  #miRglmm poisson SEs
+  singular_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'isSingular')
+  #find full model SEs
+  all_SE=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], "vcov")
+  idx1=which(str_detect(rownames(all_SE[[1]]), var)==TRUE)
+  idx2=which(str_detect(colnames(all_SE[[1]]), var)==TRUE)
+  SE_vec=data.frame('SE_full'=sapply(all_SE, function(x) sqrt(x[idx1,idx2])), "singular_warning"=singular_warn)
+  rownames(SE_vec)=names(all_SE)
+  
+  
+  #find reduced model SEs
+  all_SE=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], "vcov")
+  idx1=which(str_detect(rownames(all_SE[[1]]), var)==TRUE)
+  idx2=which(str_detect(colnames(all_SE[[1]]), var)==TRUE)
+  SE_vec_red=data.frame('SE_red'=sapply(all_SE, function(x) sqrt(x[idx1,idx2])))
+  rownames(SE_vec_red)=names(all_SE)
+  glmm_SEs=transform(merge(SE_vec, SE_vec_red, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
+  #if singularity warning choose reduced model betas
+  out=data.frame('miRglmm_poiss'=glmm_SEs$SE_full)
+  rownames(out)=rownames(glmm_SEs)
+  out$miRglmm_poiss[which(glmm_SEs$singular_warning==TRUE | is.na(glmm_SEs$singular_warning))]=glmm_SEs$SE_red[which(glmm_SEs$singular_warning==TRUE | is.na(glmm_SEs$singular_warning))]
+  SEs=transform(merge(SEs, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
+  
   #miRglmnb betas
   all_coeff=unlist(sapply(model_fits[["miRglmnb"]], function(x) summary(x)$coefficients[which(str_detect(rownames(summary(x)$coefficients), var)==TRUE), which(str_detect(colnames(summary(x)$coefficients), "Error")==TRUE)]))
   out=data.frame('miRglmnb'=all_coeff)
+  rownames(out)=names(all_coeff)
+  SEs=transform(merge(SEs, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
+  #miRglmpois betas
+  all_coeff=unlist(sapply(model_fits[["miRglmpois"]], function(x) summary(x)$coefficients[which(str_detect(rownames(summary(x)$coefficients), var)==TRUE), which(str_detect(colnames(summary(x)$coefficients), "Error")==TRUE)]))
+  out=data.frame('miRglmpois'=all_coeff)
   rownames(out)=names(all_coeff)
   SEs=transform(merge(SEs, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
@@ -142,6 +202,27 @@ get_pvals <- function(model_fits, var="col_group"){
   rownames(pvals)=rownames(glmm_pvals)
   pvals$miRglmm[which(glmm_pvals$singular_warning==TRUE | is.na(glmm_pvals$singular_warning))]=glmm_pvals$reduced[which(glmm_pvals$singular_warning==TRUE | is.na(glmm_pvals$singular_warning))]
   
+  #miRglmm poiss pvals
+  singular_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'isSingular')
+  #find full model 
+  all_pvals=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], function(f) summary(f)$coefficients[, "Pr(>|z|)"])
+  idx=which(str_detect(rownames(all_pvals), var))
+  pval_full=data.frame("full"=all_pvals[idx,], "singular_warning"=singular_warn)
+  rownames(pval_full)=colnames(all_pvals)
+  
+  #find reduced model
+  all_pvals=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], function(f) summary(f)$coefficients[, "Pr(>|z|)"])
+  idx=which(str_detect(rownames(all_pvals), var))
+  pval_red=data.frame("reduced"=all_pvals[idx,])
+  rownames(pval_red)=colnames(all_pvals)
+  glmm_pvals=transform(merge(pval_full, pval_red, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
+  #if singularity warning choose reduced model 
+  out=data.frame('miRglmm_poiss'=glmm_pvals$full)
+  rownames(out)=rownames(glmm_pvals)
+  out$miRglmm_poiss[which(glmm_pvals$singular_warning==TRUE | is.na(glmm_pvals$singular_warning))]=glmm_pvals$reduced[which(glmm_pvals$singular_warning==TRUE | is.na(glmm_pvals$singular_warning))]
+  pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
   
   #miRglmnb
   double_warn=sapply(model_fits[["miRglmnb"]], 'is.double')
@@ -151,6 +232,13 @@ get_pvals <- function(model_fits, var="col_group"){
   out=data.frame('miRglmnb'=all_pvals[idx,])
   pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
+  #miRglmpois
+  double_warn=sapply(model_fits[["miRglmpois"]], 'is.double')
+  model_fits[["miRglmpois"]]=model_fits[["miRglmpois"]][double_warn==FALSE]
+  all_pvals=sapply(model_fits[["miRglmpois"]], function(f) summary(f)$coefficients[, "Pr(>|z|)"])
+  idx=which(str_detect(rownames(all_pvals), var))
+  out=data.frame('miRglmpois'=all_pvals[idx,])
+  pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
   #DESeq2
   library(DESeq2)
@@ -169,6 +257,11 @@ get_pvals <- function(model_fits, var="col_group"){
   all_pvals=model_fits[["limvoom"]][["p.value"]]
   idx=which(str_detect(colnames(all_pvals), var))
   out=data.frame('limmavoom'=all_pvals[, idx])
+  rownames(out)=rownames(all_pvals)
+  pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
+  #wilcoxon
+  out=data.frame("wilcoxon"=model_fits[["wilcoxon"]])
   rownames(out)=rownames(all_pvals)
   pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
@@ -221,29 +314,29 @@ get_varcomp <- function(full, reduced){
 
 getCoverageInd <- function(betas, SEs, nominal_level = 0.95){
   z_alpha=qnorm(1-(1-nominal_level)/2)
-  LL_mat=betas[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]-z_alpha*SEs[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]
-  UL_mat=betas[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]+z_alpha*SEs[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]
+  LL_mat=betas[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]-z_alpha*SEs[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]
+  UL_mat=betas[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]+z_alpha*SEs[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]
   coverage_indicator=data.frame(1*((LL_mat<=betas$true_beta) & (UL_mat >= betas$true_beta)))
   return(coverage_indicator)
 }
 
 getCI_widths <- function(betas, SEs, nominal_level = 0.95){
   z_alpha=qnorm(1-(1-nominal_level)/2)
-  LL_mat=betas[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]-z_alpha*SEs[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]
-  UL_mat=betas[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]+z_alpha*SEs[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]
+  LL_mat=betas[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]-z_alpha*SEs[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]
+  UL_mat=betas[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]+z_alpha*SEs[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]
   CI_widths=UL_mat-LL_mat
   return(CI_widths)
 }
 
 getCI_LL <- function(betas, SEs, nominal_level = 0.95){
   z_alpha=qnorm(1-(1-nominal_level)/2)
-  LL_mat=betas[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]-z_alpha*SEs[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]
+  LL_mat=betas[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]-z_alpha*SEs[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]
   return(LL_mat)
 }
 
 getCI_UL <- function(betas, SEs, nominal_level = 0.95){
   z_alpha=qnorm(1-(1-nominal_level)/2)
-  UL_mat=betas[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]+z_alpha*SEs[, c("miRglmm","miRglmnb","DESeq2","limmavoom")]
+  UL_mat=betas[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]+z_alpha*SEs[, c("miRglmm","miRglmm_poiss","miRglmnb","miRglmpois","DESeq2","limmavoom")]
   return(UL_mat)
 }
 
