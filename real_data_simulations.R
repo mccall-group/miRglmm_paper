@@ -1,5 +1,5 @@
 ## simulation function
-sim_random_signal <- function(se_orig, bins, mean_effect=2, sd_effect=1){
+sim_random_signal <- function(se_orig, bins, mean_effect=2, sd_effect=1, trunc_lower=1, trunc_higher=3){
   ## permute remove any column data effect
   new_sample_order = sample(ncol(se_orig))
   se = se_orig[ ,new_sample_order]
@@ -15,7 +15,7 @@ sim_random_signal <- function(se_orig, bins, mean_effect=2, sd_effect=1){
   ## add signal to chosen miRNA
   ## up is increased in samples 1:19
   iup = which(rowData(se)$miRNA %in% change_miRNA_up$miRNA)
-  effect_up=rtruncnorm(length(iup), a=1, b=3, mean=mean_effect, sd=sd_effect)
+  effect_up=rtruncnorm(length(iup), a=trunc_lower, b=trunc_higher, mean=mean_effect, sd=sd_effect)
   #effect_up = rnorm(length(iup), mean_effect, sd_effect)
   #effect_up[which(effect_up < 0)] = 0 # truncate effect at zero below
   #effect_up[which(effect_up < 1)] = 1
@@ -24,7 +24,7 @@ sim_random_signal <- function(se_orig, bins, mean_effect=2, sd_effect=1){
   
   ## down is increased in samples 20:39
   idown = which(rowData(se)$miRNA %in% change_miRNA_down$miRNA)
-  effect_down=rtruncnorm(length(idown), a=1, b=3, mean=mean_effect, sd=sd_effect)
+  effect_down=rtruncnorm(length(idown), a=trunc_lower, b=trunc_higher, mean=mean_effect, sd=sd_effect)
   #effect_down = rnorm(length(idown), mean_effect, sd_effect)
   #effect_down[which(effect_down < 0)] = 0 # truncate effect at zero below
   #effect_down[which(effect_down < 1)] = 1
@@ -71,3 +71,16 @@ sims <- list()
 for(k in 1:N) sims[[k]] <- sim_random_signal(exact_subset_filtered2, bins,
                                              mean_effect=2, sd_effect=0.1) 
 save(sims, file = "sims_N100_m2_s0.1_rtruncnorm13.rda")
+
+
+## run the function with mean 4 and sd 1,and trunc bounds (3,5)
+sims <- list()
+for(k in 1:N) sims[[k]] <- sim_random_signal(exact_subset_filtered2, bins,
+                                             mean_effect=4, sd_effect=1, trunc_lower=3, trunc_higher=5) 
+save(sims, file = "sims_N100_m4_s1_rtruncnorm35.rda")
+
+## run the function with mean 1.5 and sd 1,and trunc bounds (1,2)
+sims <- list()
+for(k in 1:N) sims[[k]] <- sim_random_signal(exact_subset_filtered2, bins,
+                                             mean_effect=1.5, sd_effect=1, trunc_lower=1, trunc_higher=2) 
+save(sims, file = "sims_N100_m15_s1_rtruncnorm12.rda")
