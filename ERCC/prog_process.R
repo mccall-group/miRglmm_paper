@@ -12,13 +12,14 @@ results=list()
 #for each filter calculate beta and SE (if applicable to method)
 
 load(file="ERCC/all_filters_results.rda")
-
+fits[["miRglmm poisson"]]=fits[["filter -1 poisson"]]
+fits[["filter -1 poisson"]]=NULL
 filters=c("filter -1", "filter -0.5", "filter 0", "filter 0.5", "filter 1", "filter 1.5", "filter 2", "no filter")
 
 for (ind in seq(1, length(filters))){
 filter_in=filters[ind]
 if (ind==1){
-pull=c(filter_in, "miRglmnb", "DESeq2", "edgeR", "limvoom")
+pull=c(filter_in, "miRglmm poisson", "miRglmnb", "miRglmpois", "DESeq2", "edgeR", "limvoom")
 fits_in=fits[pull]
 fits_in[["miRglmm"]]=fits_in[[filter_in]][["miRglmm"]]
 fits_in[["miRglmm_reduced"]]=fits_in[[filter_in]][["miRglmm_reduced"]]
@@ -41,7 +42,7 @@ colnames(LRTp)=filter_in
 var_comp=list()
 var_comp[[filter_in]]=get_varcomp(fits_in[["miRglmm"]], fits_in[["miRglmm_reduced"]])
 
-
+pvals=get_pvals(fits_in, var="col_group")
 
 
 #CI widths (Wald, 95% default)
@@ -54,12 +55,12 @@ colnames(CI_UL)[1]=filter_in
 
 colnames(beta_hat)[1]=filter_in
 colnames(SE_hat)[1]=filter_in
-
+colnames(pvals)[1]=filter_in
 
 
 
 } else {
-  pull=c(filter_in, "miRglmnb", "DESeq2", "edgeR", "limvoom")
+  pull=c(filter_in, "miRglmm poisson", "miRglmnb", "miRglmpois", "DESeq2", "edgeR", "limvoom")
   fits_in=fits[pull]
   fits_in[["miRglmm"]]=fits_in[[filter_in]][["miRglmm"]]
   fits_in[["miRglmm_reduced"]]=fits_in[[filter_in]][["miRglmm_reduced"]]
@@ -68,6 +69,7 @@ colnames(SE_hat)[1]=filter_in
   #collect betas and merge
   out_beta=get_betas(fits_in,  var="col_group")
   out_SE=get_SEs(fits_in,  var="col_group")
+  out_p=get_pvals(fits_in,  var="col_group")
   out=out_beta["miRglmm"]
   colnames(out)=filter_in
   beta_hat=transform(merge(beta_hat, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
@@ -77,11 +79,16 @@ colnames(SE_hat)[1]=filter_in
   colnames(out)=filter_in
   SE_hat=transform(merge(SE_hat, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
+  #collect SEs and merge
+  out=out_p["miRglmm"]
+  colnames(out)=filter_in
+  pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
+  
+  
   #collect number of sequences used in model and merge
   out=get_nseq(fits_in[["miRglmm"]])
   colnames(out)=filter_in
   n_seq=transform(merge(n_seq, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
-  
   
   #run LRT for random slope effect
   out=run_LRT(fits_in[["miRglmm"]], fits_in[["miRglmm_reduced"]])
@@ -120,6 +127,7 @@ colnames(SE_hat)[1]=filter_in
 results[["beta_hat"]]=beta_hat
 results[["SE_hat"]]=SE_hat
 results[["LRTp"]]=LRTp
+results[["pvals"]]=pvals
 results[["var_comp"]]=var_comp
 results[["CI_width"]]=CI_widths
 results[["CI_LL"]]=CI_LL
