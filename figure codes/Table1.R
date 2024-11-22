@@ -71,17 +71,17 @@ DEvariance_table=data.frame("mean DE var"=mean_DEvar, "SD DE var"=std_DEvar,
 # max_precision=apply(precision_mat,2,max)
 # 
 # precision_table=data.frame("mean precision"=mean_precision, "SD precision"=std_precision, "median precision"=median_precision, "minimum precision"=min_precision, "maximum precision"=max_precision)
+results[["FDR"]]=lapply(results[["pvals"]], function(x) data.frame(matrix(unlist(lapply(x, function(y) p.adjust(y, method="fdr"))), ncol=9)))
 
-
-TPR_sim=lapply(results[["pvals"]], function(x) t(data.frame(TPR=colSums(x[which(x$true_beta!=0),]<0.05)/length(which(x$true_beta!=0)))))
-TNR_sim=lapply(results[["pvals"]], function(x) t(data.frame(TNR=colSums(x[which(x$true_beta==0),]>0.05)/length(which(x$true_beta==0)))))
+TPR_sim=lapply(results[["FDR"]], function(x) t(data.frame(TPR=colSums(x[which(x[,9]!=0),]<0.05)/length(which(x[,9]!=0)))))
+TNR_sim=lapply(results[["FDR"]], function(x) t(data.frame(TNR=colSums(x[which(x[,9]==0),]>0.05)/length(which(x[,9]==0)))))
 
 TPR_mat=as.data.frame(matrix(unlist(TPR_sim), ncol=9, byrow=TRUE))
-colnames(TPR_mat)=colnames(TPR_sim[[1]])
+colnames(TPR_mat)=colnames(results[["pvals"]][[1]])
 TPR_mat=TPR_mat[, 1:8]
 
 TNR_mat=as.data.frame(matrix(unlist(TNR_sim), ncol=9, byrow=TRUE))
-colnames(TNR_mat)=colnames(TNR_sim[[1]])
+colnames(TNR_mat)=colnames(results[["pvals"]][[1]])
 TNR_mat=TNR_mat[, 1:8]
 
 

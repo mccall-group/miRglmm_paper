@@ -13,6 +13,7 @@ load("sims_N100_m2_s1_rtruncnorm13.rda")
 col_group_in = c(rep("A", 19), rep("B",20))
 
 source('miRglmm.R')
+source('miRglm.R')
 
 #find truth of each simulation
 results_all=list()
@@ -43,8 +44,18 @@ dds=DESeq(ddsSE)
 res=results(dds)
 true_FC$DESeq2_estlogFC=log(2^res$log2FoldChange)
 
+# #include wilcoxon test
+# true_FC$wilcoxp=data.frame("wilcoxp"=apply(as.matrix(assay(se)), 1, function(x) wilcox.test(x[which(col_group_in=="A")], x[which(col_group_in=="B")])$p.value))
+
+
+
 #load sim results
 load(file=paste0("sim results/sims_N100_m2_s1_rtruncnorm13_results", ind_run, ".rda"))
+# se_matrix=t(as.matrix(assay(se)))
+# colnames(se_matrix)=rowData(se)$uniqueSequence
+# fits[["miRglmZINB"]]= miRglm(se_matrix, col_group=col_group_in, ncores = ncores, family="ZINB")
+# fits[["miRglmZIP"]]= miRglm(t(as.matrix(assay(se))), col_group=col_group_in, ncores = ncores, family="ZIP")
+
 
 ##### remove models where miRglmm not fit
 double_warn=sapply(fits[["miRglmm"]], 'typeof')
@@ -70,7 +81,30 @@ for (ind in 1:length(miRNA_vec)){
   }
 }
 
-bias=data.frame(results[, c("est_logFC", "DESeq2_estlogFC")]-results$true_logFC)
+true_FC=results
+#find isomiR-level point estimates- miRglmm poisson
+##### remove models where miRglmm not fit
+double_warn=sapply(fits[["miRglmm poisson"]][["miRglmm"]], 'typeof')
+fits[["miRglmm"]][which(double_warn=="double")]=NULL
+double_warn=sapply(fits[["miRglmm poisson"]][["miRglmm_reduced"]], 'typeof')
+fits[["miRglmm_reduced"]][which(double_warn=="double")]=NULL
+miRNA_vec=names(fits[["miRglmm poisson"]][["miRglmm"]])
+for (ind in 1:length(miRNA_vec)){
+  miRNA_in=miRNA_vec[ind]
+  f1=fits[["miRglmm poisson"]][["miRglmm"]][[miRNA_in]]
+  #pull out individual sequence estimates
+  seq_effect=data.frame("sequence"=rownames(ranef(f1)$sequence), "est_logFC_poisson"=ranef(f1)$sequence$col_groupB+fixef(f1)[2])
+  seq_effect$miRNA=miRNA_in
+  if (ind==1){
+    out=merge(true_FC, seq_effect, by=c("miRNA", "sequence"))
+    results=out
+  } else {
+    out=merge(true_FC, seq_effect, by=c("miRNA", "sequence"))
+    results=rbind(results, out)
+  }
+}
+
+bias=data.frame(results[, c("est_logFC", "est_logFC_poisson", "DESeq2_estlogFC")]-results$true_logFC)
 squared_error=bias^2
 MSE_sim=t(data.frame(MSE=colMeans(squared_error)))
 squared_error$true_logFC=rep(0, dim(squared_error)[1])
@@ -78,15 +112,25 @@ squared_error$true_logFC[which(results$miRNA %in% change_miRNA_up$miRNA)]=log(0.
 squared_error$true_logFC[which(results$miRNA %in% change_miRNA_down$miRNA)]=log(2)
 MSE_sim_by_truth=squared_error %>% group_by(true_logFC) %>% summarise_all(funs(mean))
 
+results_2=results
+results_2$true_logFC=rep(0, dim(results_2)[1])
+results_2$true_logFC[which(results$miRNA %in% change_miRNA_up$miRNA)]=log(0.5)
+results_2$true_logFC[which(results$miRNA %in% change_miRNA_down$miRNA)]=log(2)
+results_2[which(results_2$true_logFC<0),c("est_logFC", "est_logFC_poisson", "DESeq2_estlogFC", "true_logFC")]=-1*results_2[which(results_2$true_logFC<0),c("est_logFC", "est_logFC_poisson", "DESeq2_estlogFC", "true_logFC")]
+results_2=results_2[, c("est_logFC", "est_logFC_poisson", "DESeq2_estlogFC", "true_logFC")]
+var_by_truth=results_2 %>% group_by(true_logFC) %>% summarise_all(funs(var))
+
+
 
 results_all[["MSE_sim"]][[ind_run]]=MSE_sim
 results_all[["MSE_sim_by_truth"]][[ind_run]]=MSE_sim_by_truth
+results_all[["var_by_truth"]][[ind_run]]=var_by_truth
 }
 
 save(results_all, file="sim results/sims_N100_m2_s1_rtruncnorm13_seqDE_results.rda")
 
 #MSE overall
-MSE_mat=as.data.frame(matrix(unlist(results_all[["MSE_sim"]]), ncol=2, byrow=TRUE))
+MSE_mat=as.data.frame(matrix(unlist(results_all[["MSE_sim"]]), ncol=3, byrow=TRUE))
 colnames(MSE_mat)=colnames(results_all[["MSE_sim"]][[1]])
 
 #MSE by truth
@@ -96,6 +140,11 @@ miRglmm_means=data.frame(t(colMeans(out_miRglmm)))
 colnames(miRglmm_means)=results_all[["MSE_sim_by_truth"]][[1]][["true_logFC"]]
 miRglmm_means$method="miRglmm"
 
+out_miRglmm2=data.frame(rbind(t(sapply(seq(1, length(sims)), function(row) results_all[["MSE_sim_by_truth"]][[row]][["est_logFC_poisson"]]))))
+colnames(out_miRglmm2)=results_all[["MSE_sim_by_truth"]][[1]][["true_logFC"]]
+miRglmm2_means=data.frame(t(colMeans(out_miRglmm2)))
+colnames(miRglmm2_means)=results_all[["MSE_sim_by_truth"]][[1]][["true_logFC"]]
+miRglmm2_means$method="miRglmm poisson"
 
 out_DESeq2=data.frame(rbind(t(sapply(seq(1, length(sims)), function(row) results_all[["MSE_sim_by_truth"]][[row]][["DESeq2_estlogFC"]]))))
 colnames(out_DESeq2)=results_all[["MSE_sim_by_truth"]][[1]][["true_logFC"]]
@@ -103,4 +152,25 @@ DESeq2_means=data.frame(t(colMeans(out_DESeq2)))
 colnames(DESeq2_means)=results_all[["MSE_sim_by_truth"]][[1]][["true_logFC"]]
 DESeq2_means$method="DESeq2"
 
-MSE_by_truth=rbind(miRglmm_means, DESeq2_means)
+MSE_by_truth=rbind(miRglmm_means, miRglmm2_means, DESeq2_means)
+
+#var by truth
+out_miRglmm=data.frame(rbind(t(sapply(seq(1, length(sims)), function(row) results_all[["var_by_truth"]][[row]][["est_logFC"]]))))
+colnames(out_miRglmm)=results_all[["var_by_truth"]][[1]][["true_logFC"]]
+miRglmm_means=data.frame(t(colMeans(out_miRglmm)))
+colnames(miRglmm_means)=results_all[["var_by_truth"]][[1]][["true_logFC"]]
+miRglmm_means$method="miRglmm"
+
+out_miRglmm2=data.frame(rbind(t(sapply(seq(1, length(sims)), function(row) results_all[["var_by_truth"]][[row]][["est_logFC_poisson"]]))))
+colnames(out_miRglmm2)=results_all[["var_by_truth"]][[1]][["true_logFC"]]
+miRglmm2_means=data.frame(t(colMeans(out_miRglmm2)))
+colnames(miRglmm2_means)=results_all[["var_by_truth"]][[1]][["true_logFC"]]
+miRglmm2_means$method="miRglmm poisson"
+
+out_DESeq2=data.frame(rbind(t(sapply(seq(1, length(sims)), function(row) results_all[["var_by_truth"]][[row]][["DESeq2_estlogFC"]]))))
+colnames(out_DESeq2)=results_all[["var_by_truth"]][[1]][["true_logFC"]]
+DESeq2_means=data.frame(t(colMeans(out_DESeq2)))
+colnames(DESeq2_means)=results_all[["var_by_truth"]][[1]][["true_logFC"]]
+DESeq2_means$method="DESeq2"
+
+var_by_truth=rbind(miRglmm_means, miRglmm2_means, DESeq2_means)

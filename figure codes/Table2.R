@@ -61,15 +61,37 @@ all(rownames(pvals)==rownames(beta_hat))
 pvals=pvals[,c("filter..1","miRglmm_poiss", "miRglmnb","miRglmpois", "DESeq2","edgeR","limmavoom")]
 colnames(pvals)=c("miRglmm-NB","miRglmm-Poisson", "NB GLM","Poisson GLM", "DESeq2","edgeR","limma-voom")
 
-is_sig=as.data.frame(pvals<0.05)
+
+FDR=data.frame(apply(pvals, 2, function(x) p.adjust(x, method="fdr")))
+colnames(FDR)=colnames(pvals)
+all(rownames(FDR)==rownames(beta_hat))
+
+is_sig=as.data.frame(FDR<0.05)
 TPR=data.frame("TPR"=colSums(is_sig[which(beta_hat$`True LogFC`!=0),], na.rm=TRUE)/colSums(!is.na(is_sig[which(beta_hat$`True LogFC`!=0),])))
 rownames(TPR)=c("miRglmm-NB","miRglmm-Poisson", "NB GLM","Poisson GLM", "DESeq2","edgeR", "limma-voom")
 
-not_sig=as.data.frame(pvals>0.05)
+not_sig=as.data.frame(FDR>0.05)
 TNR=data.frame("TNR"=colSums(not_sig[which(beta_hat$`True LogFC`==0),], na.rm=TRUE)/colSums(!is.na(not_sig[which(beta_hat$`True LogFC`==0),])))
 rownames(TNR)=c("miRglmm-NB","miRglmm-Poisson", "NB GLM","Poisson GLM", "DESeq2","edgeR", "limma-voom")
 
-
+FC_vec=sort(unique(log(exp(abs(beta_hat$`True LogFC`)))))
+FC_vec=FC_vec[FC_vec>0]
+FC_vec=FC_vec[1:7]
+for (ind in seq(1, length(FC_vec))){
+  FC_in=exp(FC_vec[ind])
+  idx=which(exp(abs(beta_hat$`True LogFC`))==FC_in)
+  beta_hat_sub=beta_hat[idx,]
+  if (ind==1){
+  TPR_byFC=data.frame("TPR"=colSums(is_sig[idx,], na.rm=TRUE)/colSums(!is.na(is_sig[idx,])))
+  var_byFC=data.frame(apply(rbind(-1*beta_hat_sub[beta_hat_sub$`True LogFC`<0,], beta_hat_sub[beta_hat_sub$`True LogFC`>0,]),2,var)*1000)
+  } else {
+    TPR_byFC=cbind(TPR_byFC, data.frame("TPR"=colSums(is_sig[idx,], na.rm=TRUE)/colSums(!is.na(is_sig[idx,]))))
+    var_byFC=cbind(var_byFC, data.frame(apply(rbind(-1*beta_hat_sub[beta_hat_sub$`True LogFC`<0,], beta_hat_sub[beta_hat_sub$`True LogFC`>0,]),2,var)*1000))
+  }
+}
+colnames(TPR_byFC)=exp(FC_vec)
+colnames(var_byFC)=exp(FC_vec)
+var_byFC=var_byFC[1:7,]
 
 
 table_out=cbind(MSE,  "coverage probability"=cov_prob[match(rownames(MSE), rownames(cov_prob)),1])
@@ -78,5 +100,6 @@ table_out=cbind(table_out,  "DE variance"=DEvar_mat[match(rownames(table_out), r
 table_out=cbind(table_out,  "TPR"=TPR[match(rownames(table_out), rownames(TPR)),1])
 table_out=cbind(table_out,  "TNR"=TNR[match(rownames(table_out), rownames(TNR)),1])
 write.csv(table_out, file="figures/resub/Table2.csv")
-
+write.csv(TPR_byFC, file="figures/resub/Table2_TPRbyFC.csv")
+write.csv(var_byFC, file="figures/resub/Table2_varbyFC.csv")
 

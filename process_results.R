@@ -261,7 +261,7 @@ get_pvals <- function(model_fits, var="col_group"){
   pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
   #wilcoxon
-  if("wicoxon" %in% names(model_fits)){
+  if("wilcoxon" %in% names(model_fits)){
   out=data.frame("wilcoxon"=model_fits[["wilcoxon"]])
   rownames(out)=rownames(all_pvals)
   pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)

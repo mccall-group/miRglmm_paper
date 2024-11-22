@@ -38,6 +38,9 @@ fits[["miRglmm poisson"]][["miRglmm"]][which(double_warn=="double")]=NULL
 double_warn=sapply(fits[["miRglmm poisson"]][["miRglmm_reduced"]], 'typeof')
 fits[["miRglmm poisson"]][["miRglmm_reduced"]][which(double_warn=="double")]=NULL
 
+#remove models where miRglmnb not fit
+double_warn=sapply(fits[["miRglmnb"]], 'typeof')
+fits[["miRglmnb"]][which(double_warn=="double")]=NULL
 
 #collect betas
 beta_hat=get_betas(fits,  var="col_group")
