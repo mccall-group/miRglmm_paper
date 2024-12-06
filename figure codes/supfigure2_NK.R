@@ -1,6 +1,6 @@
 #load(file='monocyte_exact_subset_filtered2.rda')
 load(file='study 89/study89_data_subset_filtered2.rda')
-exact_subset_filtered2=study89_data_subset_filtered2[, study89_data_subset_filtered2$cell_tissue=="T_lymphocyte_CD8"]
+exact_subset_filtered2=study89_data_subset_filtered2[, study89_data_subset_filtered2$cell_tissue=="Natural_Killer_Cells_CD56"]
 Y_all=t(assay(exact_subset_filtered2))
 total_counts=rowSums(Y_all)
 
@@ -26,7 +26,7 @@ spear_corr=cor(df2[,1], df2[,2], method="spearman")
 print(spear_corr)
 names(df2)=c("max sequence", "second max sequence")
 p2=ggplot(df2, aes(x=`max sequence`, y=`second max sequence`))+geom_point()+
-  ggtitle(label='Proportion of reads mapped to top expressing isomiRs', subtitle='Spearman Correlation = -0.31')+
+  ggtitle(label='Proportion of reads mapped to top expressing isomiRs', subtitle='Spearman Correlation = 0.33')+
   xlab(paste('Proportion of reads mapped to', '\n', 'top expressing isomiR'))+
   ylab(paste('Proportion of reads mapped to second ', '\n', 'highest expressing isomiR'))+
   theme(plot.title=element_text(size=15, hjust=0.5), plot.subtitle=element_text(size=12, hjust=0.5),
@@ -60,7 +60,7 @@ spear_corr=cor(df2[,1], df2[,2], method="spearman")
 print(spear_corr)
 names(df2)=c("max sequence", "second max sequence")
 p1=ggplot(df2, aes(x=`max sequence`, y=`second max sequence`))+geom_point()+
-  ggtitle(label='Proportion of reads mapped to top expressing miRNA', subtitle='Spearman Correlation = -0.49')+
+  ggtitle(label='Proportion of reads mapped to top expressing miRNA', subtitle='Spearman Correlation = -0.19')+
   xlab(paste('Proportion of reads mapped to', '\n', 'top expressing miRNA'))+
   ylab(paste('Proportion of reads mapped to second', '\n', 'highest expressing miRNA'))+
   theme(plot.title=element_text(size=15, hjust=0.5), plot.subtitle=element_text(size=12, hjust=0.5),
@@ -69,5 +69,5 @@ p1=ggplot(df2, aes(x=`max sequence`, y=`second max sequence`))+geom_point()+
 
 library(gridExtra)
 ggarrange(p1,p2, nrow=1, ncol=2)
-ggsave("figures/supfigure1_CD8T.tif", plot=last_plot(), device="tiff", width=14, height=6, units="in", dpi=320, bg="white")
+ggsave("figures/supfigure2_NK.tif", plot=last_plot(), device="tiff", width=14, height=6, units="in", dpi=320, bg="white")
 

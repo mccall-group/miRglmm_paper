@@ -46,13 +46,13 @@ lt_UL=CI_UL[,!(colnames(CI_UL)=="True LogFC")]>=CI_UL[,"True LogFC"]
 
 cov_prob=data.frame("coverage probability"=colMeans(gr_LL& lt_UL, na.rm=TRUE))
 
-nullvar_mat=data.frame("null variance"=apply(beta_hat[beta_hat$`True LogFC`==0,],2,var))
+nullvar_mat=data.frame("null variance"=apply(beta_hat[beta_hat$`True LogFC`==0,],2,var, na.rm=TRUE))
 nullvar_mat=nullvar_mat*1000
 rownames(nullvar_mat)=c("miRglmm-NB","miRglmm-Poisson", "NB GLM","Poisson GLM", "DESeq2","edgeR", "limma-voom", "True LogFC")
 
 
 
-DEvar_mat=data.frame("null variance"=apply(rbind(-1*beta_hat[beta_hat$`True LogFC`<0,], beta_hat[beta_hat$`True LogFC`>0,]),2,var))
+DEvar_mat=data.frame("null variance"=apply(rbind(-1*beta_hat[beta_hat$`True LogFC`<0,], beta_hat[beta_hat$`True LogFC`>0,]),2,var, na.rm=TRUE))
 DEvar_mat=DEvar_mat*1000
 rownames(DEvar_mat)=c("miRglmm-NB","miRglmm-Poisson", "NB GLM","Poisson GLM", "DESeq2","edgeR", "limma-voom", "True LogFC")
 
@@ -99,7 +99,20 @@ table_out=cbind(table_out,  "null variance"=nullvar_mat[match(rownames(table_out
 table_out=cbind(table_out,  "DE variance"=DEvar_mat[match(rownames(table_out), rownames(DEvar_mat)),1])
 table_out=cbind(table_out,  "TPR"=TPR[match(rownames(table_out), rownames(TPR)),1])
 table_out=cbind(table_out,  "TNR"=TNR[match(rownames(table_out), rownames(TNR)),1])
-write.csv(table_out, file="figures/resub/Table2.csv")
-write.csv(TPR_byFC, file="figures/resub/Table2_TPRbyFC.csv")
-write.csv(var_byFC, file="figures/resub/Table2_varbyFC.csv")
 
+
+beta_hat$isDE=0
+idx=which(beta_hat$`True LogFC`!=0)
+beta_hat$isDE[idx]=1
+AUC_vec=0
+for (ind in seq(1,7)){
+  roc_obj=roc(beta_hat$isDE,FDR[,ind])
+  AUC_vec[ind]=auc(roc_obj)
+}
+AUC_vec=data.frame(AUC_vec)
+rownames(AUC_vec)=colnames(FDR)
+table_out=cbind(table_out,  "AUC"=AUC_vec[match(rownames(table_out), rownames(AUC_vec)),1])
+
+write.csv(table_out, file="figures/Table2.csv")
+write.csv(TPR_byFC, file="figures/Table2_TPRbyFC.csv")
+write.csv(var_byFC, file="figures/Table2_varbyFC.csv")

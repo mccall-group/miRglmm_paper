@@ -1,35 +1,59 @@
+### summarize simulation results by truth via boxplots
+library(reshape2)
 library(ggplot2)
 
 
-#load truth data
-ratio_pool=read.csv(file="ERCC files/FINAL_Ratiometric_SynthA_and_SynthB-1_fixlast3.csv", sep="\t")
-ratio_pool$A=as.numeric(gsub("x","",ratio_pool$X.SAMPLE.A.))
-ratio_pool$B=as.numeric(gsub("x","",ratio_pool$X.SAMPLE.B.))
-ratio_pool$ratio=ratio_pool$B/ratio_pool$A
-ratio_pool$true_logFC=log(ratio_pool$ratio)
-out=ratio_pool["true_logFC"]
-rownames(out)=ratio_pool$ratio.seqID
+############# MSE by truth boxplots
+load(file="sim results/sims_N100_m2_s1_rtruncnorm13_combinedresults.rda")
+uniq_miRNA=seq(1,length(results[["MSE_sim_by_truth"]]))
+
+out_miRglmm=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["miRglmm"]]))))
+colnames(out_miRglmm)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_miRglmm$method="miRglmm"
+
+out_miRglmnb=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["miRglmnb"]]))))
+colnames(out_miRglmnb)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_miRglmnb$method="NB GLM"
+
+out_DESeq2=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["DESeq2"]]))))
+colnames(out_DESeq2)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_DESeq2$method="DESeq2"
+
+out_edgeR=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["edgeR"]]))))
+colnames(out_edgeR)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_edgeR$method="edgeR"
+
+out_limvoom=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["MSE_sim_by_truth"]][[row]][["limmavoom"]]))))
+colnames(out_limvoom)=results[["MSE_sim_by_truth"]][[1]][["true_beta"]]
+out_limvoom$method="limma-voom"
+
+out_all=rbind(out_miRglmm, out_miRglmnb, out_DESeq2, out_edgeR, out_limvoom)
+data_long = melt(out_all, 
+                 id.vars = c("method"),
+                 variable.name = "truth", 
+                 value.name = "MSE")
+
+data_long$`True LogFC`=as.factor(round(exp(as.numeric(as.character(data_long$truth))), digits=2))
+data_long$method=factor(data_long$method, levels=c("miRglmm", "empty", "NB GLM", "DESeq2", "edgeR", "limma-voom"))
+data_long$MSE=data_long$MSE*1000
 
 
+############# proportion of significant random effects by truth
+uniq_miRNA=seq(1,length(results[["prop_sig_by_truth"]]))
 
-#load processed results
-load('ERCC/allfilters_processed_results.rda')
+out_all=data.frame(rbind(t(sapply(uniq_miRNA, function(row) results[["prop_sig_by_truth"]][[row]][["sig"]]))))
+colnames(out_all)=results[["prop_sig_by_truth"]][[1]][["true_beta"]]
+data_long = melt(out_all, 
+                 variable.name = "truth", 
+                 value.name = "proportion significant")
+data_long$`True LogFC`=as.factor(round(exp(as.numeric(as.character(data_long$truth))), digits=3))
 
+p3=ggplot(data_long, aes(x=`True LogFC`, y=`proportion significant`))+geom_boxplot()+
+  ylab(paste('proportion of miRNA with', '\n' , 'significant random slope effect'))+xlab('True Fold Change')+
+  theme(axis.title=element_text(size=15), axis.text=element_text(size=15),
+        legend.title=element_text(size=15),
+        legend.text=element_text(size=15),
+        legend.position="bottom")
+print(p3)
 
-beta_hat=results[["beta_hat"]]
-beta_hat=transform(merge(beta_hat, out, by='row.names'), row.names=Row.names, Row.names=NULL)
-beta_hat=beta_hat[,c("filter..1","filter..0.5","filter.0","filter.0.5","filter.1" ,"filter.1.5","filter.2", "true_logFC")]
-colnames(beta_hat)=c("filter -1","filter -0.5","filter 0","filter 0.5","filter 1" ,"filter 1.5","filter 2", "True LogFC")
-
-diff=beta_hat[,!(colnames(beta_hat)=="True LogFC")]-beta_hat[,"True LogFC"]
-diff_long=stack(diff)
-colnames(diff_long)=c("diff", "method")
-diff_long$`True LogFC`=as.factor(round(as.numeric(as.character(rep(exp(beta_hat[,"True LogFC"]), times=ncol(diff)))), digits=2))
-
-ggplot(diff_long, aes(x=`True LogFC`, y=diff, fill=method))+geom_boxplot()+
-  ylab('Pool LogFC Estimate-Truth')+xlab('True Pool Fold Change')+theme(axis.title=element_text(size=15),
-                                                                              axis.text=element_text(size=15),
-                                                                              legend.title=element_text(size=15),
-                                                                              legend.text=element_text(size=15))
-
-ggsave("figures/supfigure4.tif", plot=last_plot(), device="tiff", width=10.29, height=4.88, units="in", dpi=320, bg="white")
+ggsave("figures/supfigure4.tif", plot=last_plot(), device="tiff", width=17, height=11, units="in", dpi=320, bg="white")

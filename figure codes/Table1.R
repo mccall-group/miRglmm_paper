@@ -1,5 +1,5 @@
 ### summarize simulation results
-
+library(pROC)
 load(file="sim results/sims_N100_m2_s1_rtruncnorm13_combinedresults.rda")
 
 MSE_mat=as.data.frame(matrix(unlist(results[["MSE_sim"]]), ncol=7, byrow=TRUE))
@@ -75,6 +75,8 @@ results[["FDR"]]=lapply(results[["pvals"]], function(x) data.frame(matrix(unlist
 
 TPR_sim=lapply(results[["FDR"]], function(x) t(data.frame(TPR=colSums(x[which(x[,9]!=0),]<0.05)/length(which(x[,9]!=0)))))
 TNR_sim=lapply(results[["FDR"]], function(x) t(data.frame(TNR=colSums(x[which(x[,9]==0),]>0.05)/length(which(x[,9]==0)))))
+auc_sim=lapply(results[["FDR"]], function(x) t(data.frame(unlist(lapply(x, function(y) auc(roc(as.numeric(x[,9]!=0),y)))))))
+
 
 TPR_mat=as.data.frame(matrix(unlist(TPR_sim), ncol=9, byrow=TRUE))
 colnames(TPR_mat)=colnames(results[["pvals"]][[1]])
@@ -84,6 +86,9 @@ TNR_mat=as.data.frame(matrix(unlist(TNR_sim), ncol=9, byrow=TRUE))
 colnames(TNR_mat)=colnames(results[["pvals"]][[1]])
 TNR_mat=TNR_mat[, 1:8]
 
+auc_mat=as.data.frame(matrix(unlist(auc_sim), ncol=9, byrow=TRUE))
+colnames(auc_mat)=colnames(results[["pvals"]][[1]])
+auc_mat=auc_mat[, 1:8]
 
 mean_TPR=colMeans(TPR_mat)
 std_TPR=apply(TPR_mat,2 ,sd)
@@ -101,28 +106,39 @@ max_TNR=apply(TNR_mat,2,max)
 
 TNR_table=data.frame("mean TNR"=mean_TNR, "SD TNR"=std_TNR, "median TNR"=median_TNR, "minimum TNR"=min_TNR, "maximum TNR"=max_TNR)
 
+mean_auc=colMeans(auc_mat)
+std_auc=apply(auc_mat,2 ,sd)
+median_auc=apply(auc_mat, 2, median)
+min_auc=apply(auc_mat,2,min)
+max_auc=apply(auc_mat,2,max)
+
+auc_table=data.frame("mean AUC"=mean_auc, "SD AUC"=std_auc, "median AUC"=median_auc, "minimum AUC"=min_auc, "maximum AUC"=max_auc)
+
+
+
 table_out=data.frame(cbind("TPR"=TPR_table[,1],  "coverage proportion"=cov_table[match(rownames(TPR_table), rownames(cov_table)),1]))
 rownames(table_out)=rownames(TPR_table)
 table_out=cbind(table_out,  "null variance"=nullvariance_table[match(rownames(table_out), rownames(nullvariance_table)),1]*1000)
 table_out=cbind(table_out,  "DE variance"=DEvariance_table[match(rownames(table_out), rownames(DEvariance_table)),1]*1000)
 table_out=cbind(table_out,  "MSE"=MSE_table[match(rownames(table_out), rownames(MSE_table)),1])
 table_out=cbind(table_out,  "TNR"=TNR_table[match(rownames(table_out), rownames(TNR_table)),1])
-table_out=table_out[, c("MSE", "coverage.proportion", "null variance", "DE variance", "TPR", "TNR")]
-write.csv(table_out, file="figures/resub/Table1.csv")
+table_out=cbind(table_out,  "AUC"=auc_table[match(rownames(table_out), rownames(auc_table)),1])
+table_out=table_out[, c("MSE", "coverage.proportion", "null variance", "DE variance", "TPR", "TNR", "AUC")]
+write.csv(table_out, file="figures/Table1.csv")
 
-write.csv(MSE_table, file="figures/resub/Table1_MSE.csv")
-write.csv(cov_table, file="figures/resub/Table1_cov.csv")
+write.csv(MSE_table, file="figures/Table1_MSE.csv")
+write.csv(cov_table, file="figures/Table1_cov.csv")
 # write.csv(nullvariance_table, file="figures/Table1_nullvariance.csv")
 # write.csv(DEvariance_table, file="figures/Table1_DEvariance.csv")
 # # write.csv(precision_table, file="figures/Table1_precision.csv")
 # write.csv(TPR_table, file="figures/Table1_TPR.csv")
 # write.csv(TNR_table, file="figures/Table1_TNR.csv")
+write.csv(auc_table, file="figures/Table1_AUC.csv")
 
 
 
 
-
-mean(MSE_mat$miRglmm[which(n_min_MSE==1)]-MSE_mat$DESeq2[which(n_min_MSE==1)])
-mean(MSE_mat$DESeq2[which(n_min_MSE==3)]-MSE_mat$miRglmm[which(n_min_MSE==3)])
-median(MSE_mat$miRglmm[which(n_min_MSE==1)]-MSE_mat$DESeq2[which(n_min_MSE==1)])
-median(MSE_mat$DESeq2[which(n_min_MSE==3)]-MSE_mat$miRglmm[which(n_min_MSE==3)])
+# mean(MSE_mat$miRglmm[which(n_min_MSE==1)]-MSE_mat$DESeq2[which(n_min_MSE==1)])
+# mean(MSE_mat$DESeq2[which(n_min_MSE==3)]-MSE_mat$miRglmm[which(n_min_MSE==3)])
+# median(MSE_mat$miRglmm[which(n_min_MSE==1)]-MSE_mat$DESeq2[which(n_min_MSE==1)])
+# median(MSE_mat$DESeq2[which(n_min_MSE==3)]-MSE_mat$miRglmm[which(n_min_MSE==3)])

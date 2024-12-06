@@ -1,4 +1,6 @@
 library(ggplot2)
+library(SummarizedExperiment)
+library(ggpubr)
 
 load("bladder_testes_data_subset_filtered2.rda")
 miRNA_counts = apply(assay(bladder_testes_data_subset_filtered2), 2, function(x) by(x, rowData(bladder_testes_data_subset_filtered2)$miRNA, sum))
@@ -53,7 +55,7 @@ data_next_two=rbind(data_next_one, data_next_two)
 data_comb=rbind(agg_choose[, c("cpm", "sequence", "col_group")], data_canon[,c("cpm", "sequence", "col_group")],
                 data_next_two[, c("cpm", "sequence", "col_group")])
 data_comb$sequence=factor(data_comb$sequence, levels=unique(data_comb$sequence))
-p1=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+
+p1=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+theme_minimal()+
   theme(strip.text = element_text(size=12), axis.text.x=element_text(size=15), axis.title.x=element_blank(),
         axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.text=element_text(size=15),
         legend.title=element_text(size=15), plot.title=element_text(size=15, hjust=0.5))+
@@ -108,7 +110,7 @@ data_next_two=rbind(data_next_one, data_next_two)
 data_comb=rbind(agg_choose[, c("cpm", "sequence", "col_group")], data_canon[,c("cpm", "sequence", "col_group")],
                 data_next_two[, c("cpm", "sequence", "col_group")])
 data_comb$sequence=factor(data_comb$sequence, levels=unique(data_comb$sequence))
-p2=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+
+p2=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+theme_minimal()+
   theme(strip.text = element_text(size=12), axis.text.x=element_text(size=15), axis.title.x=element_blank(),
         axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.text=element_text(size=15),
         legend.title=element_text(size=15), plot.title=element_text(size=15, hjust=0.5))+
@@ -161,7 +163,7 @@ data_next_two=rbind(data_next_one, data_next_two)
 data_comb=rbind(agg_choose[, c("cpm", "sequence", "col_group")], data_canon[,c("cpm", "sequence", "col_group")],
                 data_next_two[, c("cpm", "sequence", "col_group")])
 data_comb$sequence=factor(data_comb$sequence, levels=unique(data_comb$sequence))
-p3=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+
+p3=ggplot(data_comb, aes(x=sequence, y=log(cpm+1)))+geom_boxplot(aes(fill=col_group))+ ylab('log(CPM+1)')+theme_minimal()+
   theme(strip.text = element_text(size=12), axis.text.x=element_text(size=15), axis.title.x=element_blank(),
         axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.text=element_text(size=15),
         legend.title=element_text(size=15), plot.title=element_text(size=15, hjust=0.5))+
