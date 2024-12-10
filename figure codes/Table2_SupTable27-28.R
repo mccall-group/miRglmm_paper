@@ -114,5 +114,5 @@ rownames(AUC_vec)=colnames(FDR)
 table_out=cbind(table_out,  "AUC"=AUC_vec[match(rownames(table_out), rownames(AUC_vec)),1])
 
 write.csv(table_out, file="figures/Table2.csv")
-write.csv(TPR_byFC, file="figures/Table2_TPRbyFC.csv")
-write.csv(var_byFC, file="figures/Table2_varbyFC.csv")
+write.csv(TPR_byFC, file="figures/SupTable27_TPRbyFC.csv")
+write.csv(var_byFC, file="figures/SupTable28_varbyFC.csv")
