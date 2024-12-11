@@ -36,6 +36,7 @@ fits[["miRglmm poisson"]] = miRglmm(study89_data_subset_filtered2, col_group=col
 #aggregate data to miRNAs and fit miRglmnb
 miRNA_counts = t(apply(assay(study89_data_subset_filtered2), 2, function(x) by(x, rowData(study89_data_subset_filtered2)$miRNA, sum)))
 fits[["miRglmnb"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores)
+fits[["miRglmpois"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores, family="poisson")
 
 if (ncores>1){
   stopCluster(cl)
