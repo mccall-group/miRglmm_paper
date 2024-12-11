@@ -22,16 +22,20 @@ if (ncores>1){
 #define groups to compare
 col_group_in = as.factor(colData(study89_data_subset_filtered2)$cell_tissue)
 
-source('scratch/aberry3/McCall/miRNA/miRglmm/miRglmm.R')
-source('scratch/aberry3/McCall/miRNA/miRglmm/miRglmnb.R')
+source('miRglmm.R')
+source('miRglm.R')
 
 
 #fit miRglmm full and reduced models
 fits = miRglmm(study89_data_subset_filtered2, col_group=col_group_in, ncores = ncores)
 
+#fit miRglmm full and reduced models
+fits[["miRglmm poisson"]] = miRglmm(study89_data_subset_filtered2, col_group=col_group_in, ncores = ncores, family="poisson")
+
+
 #aggregate data to miRNAs and fit miRglmnb
 miRNA_counts = t(apply(assay(study89_data_subset_filtered2), 2, function(x) by(x, rowData(study89_data_subset_filtered2)$miRNA, sum)))
-fits[["miRglmnb"]]= miRglmnb(miRNA_counts, col_group=col_group_in, ncores = ncores)
+fits[["miRglmnb"]]= miRglm(miRNA_counts, col_group=col_group_in, ncores = ncores)
 
 if (ncores>1){
   stopCluster(cl)
