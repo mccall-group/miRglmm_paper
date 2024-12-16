@@ -1,7 +1,8 @@
 get_betas <- function(model_fits, var="col_group"){
   library(stringr)
   
-
+  double_warn=sapply(model_fits[["miRglmm"]], 'is.double')
+  model_fits[["miRglmm"]]=model_fits[["miRglmm"]][double_warn==FALSE]
   #miRglmm betas
   singular_warn=sapply(model_fits[["miRglmm"]], 'isSingular')
   #find full model betas
@@ -11,6 +12,8 @@ get_betas <- function(model_fits, var="col_group"){
   rownames(coeff_full)=colnames(all_coeff)
   
   #find reduced model betas
+  double_warn=sapply(model_fits[["miRglmm_reduced"]], 'is.double')
+  model_fits[["miRglmm_reduced"]]=model_fits[["miRglmm_reduced"]][double_warn==FALSE]
   all_coeff=sapply(model_fits[["miRglmm_reduced"]], "fixef")
   idx=which(str_detect(rownames(all_coeff), var))
   coeff_red=data.frame("reduced"=all_coeff[idx,])
@@ -23,6 +26,8 @@ get_betas <- function(model_fits, var="col_group"){
   betas$miRglmm[which(glmm_betas$singular_warning==TRUE | is.na(glmm_betas$singular_warning))]=glmm_betas$reduced[which(glmm_betas$singular_warning==TRUE | is.na(glmm_betas$singular_warning))]
   
   #miRglmm poisson betas
+  double_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'is.double')
+  model_fits[["miRglmm poisson"]][["miRglmm"]]=model_fits[["miRglmm poisson"]][["miRglmm"]][double_warn==FALSE]
   singular_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'isSingular')
   #find full model betas
   all_coeff=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], "fixef")
@@ -31,6 +36,8 @@ get_betas <- function(model_fits, var="col_group"){
   rownames(coeff_full)=colnames(all_coeff)
   
   #find reduced model betas
+  double_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], 'is.double')
+  model_fits[["miRglmm poisson"]][["miRglmm_reduced"]]=model_fits[["miRglmm poisson"]][["miRglmm_reduced"]][double_warn==FALSE]
   all_coeff=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], "fixef")
   idx=which(str_detect(rownames(all_coeff), var))
   coeff_red=data.frame("reduced"=all_coeff[idx,])
@@ -93,6 +100,8 @@ get_SEs <- function(model_fits, var="col_group"){
   library(stringr)
   
   #miRglmm SEs
+  double_warn=sapply(model_fits[["miRglmm"]], 'is.double')
+  model_fits[["miRglmm"]]=model_fits[["miRglmm"]][double_warn==FALSE]
   singular_warn=sapply(model_fits[["miRglmm"]], 'isSingular')
   #find full model SEs
   all_SE=sapply(model_fits[["miRglmm"]], "vcov")
@@ -103,6 +112,8 @@ get_SEs <- function(model_fits, var="col_group"){
   
   
   #find reduced model SEs
+  double_warn=sapply(model_fits[["miRglmm_reduced"]], 'is.double')
+  model_fits[["miRglmm_reduced"]]=model_fits[["miRglmm_reduced"]][double_warn==FALSE]
   all_SE=sapply(model_fits[["miRglmm_reduced"]], "vcov")
   idx1=which(str_detect(rownames(all_SE[[1]]), var)==TRUE)
   idx2=which(str_detect(colnames(all_SE[[1]]), var)==TRUE)
@@ -117,6 +128,8 @@ get_SEs <- function(model_fits, var="col_group"){
   
   
   #miRglmm poisson SEs
+  double_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'is.double')
+  model_fits[["miRglmm poisson"]][["miRglmm"]]=model_fits[["miRglmm poisson"]][["miRglmm"]][double_warn==FALSE]
   singular_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'isSingular')
   #find full model SEs
   all_SE=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], "vcov")
@@ -127,6 +140,8 @@ get_SEs <- function(model_fits, var="col_group"){
   
   
   #find reduced model SEs
+  double_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], 'is.double')
+  model_fits[["miRglmm poisson"]][["miRglmm_reduced"]]=model_fits[["miRglmm poisson"]][["miRglmm_reduced"]][double_warn==FALSE]
   all_SE=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], "vcov")
   idx1=which(str_detect(rownames(all_SE[[1]]), var)==TRUE)
   idx2=which(str_detect(colnames(all_SE[[1]]), var)==TRUE)
@@ -183,6 +198,8 @@ get_pvals <- function(model_fits, var="col_group"){
   
   
   #miRglmm pvals
+  double_warn=sapply(model_fits[["miRglmm"]], 'is.double')
+  model_fits[["miRglmm"]]=model_fits[["miRglmm"]][double_warn==FALSE]
   singular_warn=sapply(model_fits[["miRglmm"]], 'isSingular')
   #find full model 
   all_pvals=sapply(model_fits[["miRglmm"]], function(f) summary(f)$coefficients[, "Pr(>|z|)"])
@@ -191,6 +208,8 @@ get_pvals <- function(model_fits, var="col_group"){
   rownames(pval_full)=colnames(all_pvals)
   
   #find reduced model
+  double_warn=sapply(model_fits[["miRglmm_reduced"]], 'is.double')
+  model_fits[["miRglmm_reduced"]]=model_fits[["miRglmm_reduced"]][double_warn==FALSE]
   all_pvals=sapply(model_fits[["miRglmm_reduced"]], function(f) summary(f)$coefficients[, "Pr(>|z|)"])
   idx=which(str_detect(rownames(all_pvals), var))
   pval_red=data.frame("reduced"=all_pvals[idx,])
@@ -203,6 +222,8 @@ get_pvals <- function(model_fits, var="col_group"){
   pvals$miRglmm[which(glmm_pvals$singular_warning==TRUE | is.na(glmm_pvals$singular_warning))]=glmm_pvals$reduced[which(glmm_pvals$singular_warning==TRUE | is.na(glmm_pvals$singular_warning))]
   
   #miRglmm poiss pvals
+  double_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'is.double')
+  model_fits[["miRglmm poisson"]][["miRglmm"]]=model_fits[["miRglmm poisson"]][["miRglmm"]][double_warn==FALSE]
   singular_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], 'isSingular')
   #find full model 
   all_pvals=sapply(model_fits[["miRglmm poisson"]][["miRglmm"]], function(f) summary(f)$coefficients[, "Pr(>|z|)"])
@@ -211,6 +232,9 @@ get_pvals <- function(model_fits, var="col_group"){
   rownames(pval_full)=colnames(all_pvals)
   
   #find reduced model
+  double_warn=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], 'is.double')
+  model_fits[["miRglmm poisson"]][["miRglmm_reduced"]]=model_fits[["miRglmm poisson"]][["miRglmm_reduced"]][double_warn==FALSE]
+  
   all_pvals=sapply(model_fits[["miRglmm poisson"]][["miRglmm_reduced"]], function(f) summary(f)$coefficients[, "Pr(>|z|)"])
   idx=which(str_detect(rownames(all_pvals), var))
   pval_red=data.frame("reduced"=all_pvals[idx,])
@@ -249,8 +273,8 @@ get_pvals <- function(model_fits, var="col_group"){
   pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
   #edgeR
-  out=data.frame('edgeR'=fits[["edgeR"]][["table"]][["PValue"]]) 
-  rownames(out)=rownames(fits[["edgeR"]][["table"]])
+  out=data.frame('edgeR'=model_fits[["edgeR"]][["table"]][["PValue"]]) 
+  rownames(out)=rownames(model_fits[["edgeR"]][["table"]])
   pvals=transform(merge(pvals, out, by='row.names', all=T), row.names=Row.names, Row.names=NULL)
   
   #limma-voom betas
@@ -271,6 +295,13 @@ get_pvals <- function(model_fits, var="col_group"){
 }
 
 run_LRT <- function(full, reduced){
+  
+  double_warn=sapply(full, 'is.double')
+  full=full[double_warn==FALSE]
+  
+  double_warn=sapply(reduced, 'is.double')
+  reduced=reduced[double_warn==FALSE]
+  
   uniq_miRNA=intersect(names(full), names(reduced))
 out=data.frame("LRTp"=sapply(uniq_miRNA, function(row) anova(full[[row]], reduced[[row]])$`Pr(>Chisq)`[2]))
 rownames(out)=uniq_miRNA
