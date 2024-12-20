@@ -1,137 +1,73 @@
-library(irr)
-library(vcd)
+library(ggplot2)
 
-load(file='bladder_testes_results/filter_neg1_processed_results.rda')
-
+load(file='study89_exact/results/filter_neg1_processed_results.rda')
 beta_df=data.frame(results[["beta_hat"]])
+
 p_df=data.frame(results[["pvals"]])
-padj_df=matrix(, nrow=dim(p_df)[1], ncol=dim(p_df)[2])
-for (ind in seq(1,dim(p_df)[2])){
-  padj_df[,ind]=p.adjust(p_df[,ind], method="BH")
+padj_df=matrix(, nrow=dim(p_df)[1], ncol=dim(p_df)[2]-1)
+for (ind in seq(1,dim(p_df)[2]-1)){
+  padj_df[which(p_df$contrast=="CD4 T lymphocyte vs B lymphocyte"),ind]=p.adjust(p_df[which(p_df$contrast=="CD4 T lymphocyte vs B lymphocyte"),ind], method="BH")
+  padj_df[which(p_df$contrast=="CD8 T lymphocyte vs B lymphocyte"),ind]=p.adjust(p_df[which(p_df$contrast=="CD8 T lymphocyte vs B lymphocyte"),ind], method="BH")
+  padj_df[which(p_df$contrast=="Monocyte vs B lymphocyte"),ind]=p.adjust(p_df[which(p_df$contrast=="Monocyte vs B lymphocyte"),ind], method="BH")
+  padj_df[which(p_df$contrast=="Natural Killer vs B lymphocyte"),ind]=p.adjust(p_df[which(p_df$contrast=="Natural Killer vs B lymphocyte"),ind], method="BH")
 }
-sig_df=data.frame(padj_df<0.05)
-colnames(sig_df)=colnames(data.frame(results[["pvals"]]))
-rownames(sig_df)=rownames(data.frame(results[["pvals"]]))
+
+beta_df_all=beta_df
+padj_df_all=data.frame(padj_df)
+padj_df_all$contrast=p_df[,8]
+rownames(padj_df_all)=rownames(p_df)
+colnames(padj_df_all)=colnames(p_df)
+
+contrasts=c("Monocyte vs B lymphocyte", "Natural Killer vs B lymphocyte",
+            "CD4 T lymphocyte vs B lymphocyte","CD8 T lymphocyte vs B lymphocyte")
 
 
-#create interaction significant groups of all aggregated methods vs miRglmm
-sig_groups_v_miRglmm=data.frame("int1"=as.character(interaction(sig_df$DESeq2, sig_df$miRglmnb)), "int2"=as.character(interaction(sig_df$edgeR, sig_df$miRglmnb)),
-                      "int3"=as.character(interaction(sig_df$limmavoom, sig_df$miRglmnb)), "int4"=as.character(interaction(sig_df$edgeR, sig_df$DESeq2)),
-                      "int5"=as.character(interaction(sig_df$limmavoom, sig_df$DESeq2)), "int6"=as.character(interaction(sig_df$limmavoom, sig_df$edgeR)))
-rownames(sig_groups_v_miRglmm)=rownames(sig_df)
+p=list()
+for (ind in seq(1, length(contrasts))){
 
-sig_groups_v_miRglmm[sig_groups_v_miRglmm=="TRUE.TRUE"]="significant for both"
-sig_groups_v_miRglmm[sig_groups_v_miRglmm=="TRUE.FALSE"]="significant for y-axis method only"
-sig_groups_v_miRglmm[sig_groups_v_miRglmm=="FALSE.TRUE"]="significant for x-axis method only"
-sig_groups_v_miRglmm[sig_groups_v_miRglmm=="FALSE.FALSE"]="significant for neither"
+contrast_in=contrasts[ind]
+padj_df=padj_df_all[which(padj_df_all$contrast==contrast_in), -c(2,4)]
+beta_df=beta_df_all[which(beta_df_all$contrast==contrast_in), -c(2,4)]
 
-#combine with the betas to make sure miRNAs align with correct beta
-comb_df=transform(merge(beta_df, sig_groups_v_miRglmm, by='row.names'), row.names=Row.names, Row.names=NULL)
+est_comb=data.frame("logFC"=beta_df[,1])
+rownames(est_comb)=rownames(beta_df)
 
-comb_df$int1=factor(comb_df$int1, levels=c("significant for x-axis method only", "significant for both",
-                                           "significant for y-axis method only", "significant for neither"))
-comb_df$int2=factor(comb_df$int2, levels=c("significant for x-axis method only", "significant for both",
-                                           "significant for y-axis method only", "significant for neither"))
+all(rownames(beta_df)==rownames(padj_df))
+est_comb$miRglmm_p=padj_df[,1]
 
-comb_df$int3=factor(comb_df$int3, levels=c("significant for x-axis method only", "significant for both",
-                                           "significant for y-axis method only", "significant for neither"))
+if (ind==1){
+LRTp=data.frame(results[["LRTp"]])
+LRTpadj=data.frame("FDR"=p.adjust(LRTp[,1], method="BH"))
+rownames(LRTpadj)=rownames(LRTp)
 
-comb_df$int4=factor(comb_df$int4, levels=c("significant for x-axis method only", "significant for both",
-                                           "significant for y-axis method only", "significant for neither"))
+est_comb=merge(est_comb, LRTpadj, by="row.names")
+rownames(est_comb)=est_comb$Row.names
+est_comb=est_comb[, -1]
+LRTpadj=data.frame("FDR"=est_comb$FDR)
+rownames(LRTpadj)=rownames(est_comb)
 
-comb_df$int5=factor(comb_df$int5, levels=c("significant for x-axis method only", "significant for both",
-                                           "significant for y-axis method only", "significant for neither"))
-
-comb_df$int6=factor(comb_df$int6, levels=c("significant for x-axis method only", "significant for both",
-                                           "significant for y-axis method only", "significant for neither"))
-
-#calculate ICC and Kappa to include in plotting
-
-icc_out=data.frame(icc=t(sapply(seq(3,5), function(x) icc(comb_df[, c(2,x)], model="oneway", type="agreement", unit="single")$value)))
-colnames(icc_out)=colnames(comb_df)[3:5]
-icc_out2=data.frame(icc=t(sapply(seq(4,5), function(x) icc(comb_df[, c(3,x)], model="oneway", type="agreement", unit="single")$value)))
-colnames(icc_out2)=colnames(comb_df)[4:5]
-icc_out3=data.frame(icc=t(sapply(5, function(x) icc(comb_df[, c(4,x)], model="oneway", type="agreement", unit="single")$value)))
-colnames(icc_out3)=colnames(comb_df)[5]
-icc_out=cbind(icc_out, icc_out2, icc_out3)
-
-kappa_out=data.frame(kappa=t(sapply(seq(3,5), function(x) Kappa(table(sig_df[,2], sig_df[,x]))[["Unweighted"]][["value"]])))
-colnames(kappa_out)=colnames(sig_df)[3:5]
-kappa_out2=data.frame(kappa=t(sapply(seq(4,5), function(x) Kappa(table(sig_df[,3], sig_df[,x]))[["Unweighted"]][["value"]])))
-colnames(kappa_out2)=colnames(sig_df)[4:5]
-kappa_out3=data.frame(kappa=t(sapply(5, function(x) Kappa(table(sig_df[,4], sig_df[,x]))[["Unweighted"]][["value"]])))
-colnames(kappa_out3)=colnames(sig_df)[5]
-kappa_out=cbind(kappa_out, kappa_out2, kappa_out3)
-#idx=which(rownames(comb_df)=="hsa-miR-27a-3p")
-#scatter plots
-p1=ggplot(comb_df, aes(x=miRglmnb, y=DESeq2, color=int1))+geom_point()+geom_abline()+xlab('NB GLM logFC')+ylab('DESeq2 logFC')+scale_colour_discrete(drop=FALSE)+labs(title="NB GLM vs DESeq2", color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out[1],2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out[1],2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.position="none", 
-        legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-  #annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
+} else {
+  all(rownames(LRTpadj)==rownames(est_comb))
+  est_comb$FDR=LRTpadj$FDR
+}
 
 
-#ggsave("figures/supfigure4_1.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
 
-p2=ggplot(comb_df, aes(x=miRglmnb, y=edgeR, color=int2))+geom_point()+geom_abline()+xlab('NB GLM logFC')+ylab('edgeR logFC')+scale_colour_discrete(drop=FALSE)+labs(title="NB GLM vs edgeR", color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out[2],2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out[2],2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.position="none", 
-        legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
+est_comb$`Differential IsomiR Usage`="Not signficant"
+est_comb$`Differential IsomiR Usage`[which(est_comb$FDR<0.05)]="Significant"
+est_comb$y=-log10(est_comb$miRglmm_p)
+#
+idx=which(est_comb$y>50)
+est_comb$y[idx]=50
+p[[ind]]=ggplot(est_comb, aes(x=logFC, y=y))+geom_point()+
+  theme_minimal()+
+  geom_hline(yintercept = -log10(0.05), col = "black", linetype = 'dashed')+
+  ylab('-log10(FDR)')+xlab('logFC')+ggtitle(contrast_in)+
+  theme(text=element_text(size=16), 
+        legend.text=element_text(size=12))
 
-
-#ggsave("figures/supfigure4_2.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
-
-
-p3=ggplot(comb_df, aes(x=miRglmnb, y=limmavoom, color=int3))+geom_point()+geom_abline()+xlab('NB GLM logFC')+ylab('limma-voom logFC')+scale_colour_discrete(drop=FALSE)+labs(title="NB GLM vs limma-voom", color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out[3],2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out[3],2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.position="none", 
-        legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
-
-
-#ggsave("figures/supfigure4_3.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
-
-
-p4=ggplot(comb_df, aes(x=DESeq2, y=edgeR, color=int4))+geom_point()+geom_abline()+xlab('DESeq2 logFC')+ylab('edgeR logFC')+scale_colour_discrete(drop=FALSE)+labs(title="DESeq2 vs edgeR", color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out[4],2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out[4],2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.position="none", 
-        legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
-
-
-#ggsave("figures/supfigure4_4.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
-
-p5=ggplot(comb_df, aes(x=DESeq2, y=limmavoom, color=int5))+geom_point()+geom_abline()+xlab('DESeq2 logFC')+ylab('limma-voom logFC')+scale_colour_discrete(drop=FALSE)+labs(title="DESeq2 vs limma-voom", color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out[5],2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out[5],2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.position="none", 
-        legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
-
-
-#ggsave("figures/supfigure4_5.tif", plot=last_plot(), device="tiff", scale=6, width=40, height=20, units="mm", dpi=320, bg="white")
-
-p6=ggplot(comb_df, aes(x=edgeR, y=limmavoom, color=int6))+geom_point()+geom_abline()+xlab('edgeR logFC')+ylab('limma-voom logFC')+scale_colour_discrete(drop=FALSE)+labs(title="edgeR vs limma-voom", color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out[6],2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out[6],2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.position="none", 
-        legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
-
-ggplot(comb_df, aes(x=edgeR, y=limmavoom, color=int6))+geom_point()+geom_abline()+xlab('edgeR logFC')+ylab('limma-voom logFC')+scale_colour_discrete(drop=FALSE)+labs(title="edgeR vs limma-voom", color="Significance")+
-  annotate("text", x=Inf, y=-Inf, label=paste0(paste("ICC =", format(round(icc_out[6],2), nsmall=2)), '\n', paste("Kappa =", format(round(kappa_out[6],2), nsmall=2))), hjust=1.05, vjust=-0.3, fontface=2, size=5)+
-  theme(plot.title=element_text(size=15, hjust=0.5), axis.text.x=element_text(size=15), axis.title.x=element_text(size=15),
-        axis.text.y=element_text(size=15), axis.title.y=element_text(size=15), legend.title=element_text(size=15), legend.text=element_text(size=15))#+
-#annotate("text", x=comb_df$miRglmnb.x[idx], y=comb_df$miRglmm[idx]+0.05, label="o", size=8)
-ggsave("figures/supfigure10_legend.tif", plot=last_plot(), device="tiff", width=6.98, height=4.84, units="in", dpi=320, bg="white")
-
+}
 library(ggpubr)
-ggarrange(p1, p2, p3, p4, p5, p6, nrow=3, ncol=2)
+ggarrange(p[[1]], p[[2]], p[[3]], p[[4]], nrow=2, ncol=2)
 
-ggsave("figures/supfigure10.tif", plot=last_plot(), device="tiff", width=12, height=14, units="in", dpi=320, bg="white")
-
+ggsave("figures/resub/study89_volcano.tif", plot=last_plot(), device="tiff", width=10, height=7, units="in", dpi=320, bg="white")
